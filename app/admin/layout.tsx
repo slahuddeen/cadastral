@@ -1,9 +1,9 @@
-import Link from 'next/link';
+import Link from 'next/link'
 
 export default function AdminLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
     <div className="min-h-screen bg-gray-50">
@@ -38,5 +38,5 @@ export default function AdminLayout({
         {children}
       </main>
     </div>
-  );
+  )
 }

@@ -1,162 +1,26 @@
-'use client';
+'use client'
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import Map, { Layer, Source, Popup } from 'react-map-gl';
-import { cadastralService, CadastralParcel } from '../lib/supabase';
+import React, { useState } from 'react'
+import 'mapbox-gl/dist/mapbox-gl.css'
 
-// Import Mapbox CSS
-import 'mapbox-gl/dist/mapbox-gl.css';
-
-// Simple SVG Icons
-const SearchIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="11" cy="11" r="8"/>
-    <path d="M21 21l-4.35-4.35"/>
-  </svg>
-);
-
-const LoaderIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-    <path d="M21 12a9 9 0 11-6.219-8.56"/>
-  </svg>
-);
-
-const InfoIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10"/>
-    <path d="M12 16v-4"/>
-    <path d="M12 8h.01"/>
-  </svg>
-);
-
-interface CadastralMapProps {
-  initialCenter?: [number, number];
-  initialZoom?: number;
-}
-
-const CadastralMap: React.FC<CadastralMapProps> = ({
-  initialCenter = [98.7, 3.52],
-  initialZoom = 13
-}) => {
-  const [viewState, setViewState] = useState({
-    longitude: initialCenter[0],
-    latitude: initialCenter[1],
-    zoom: initialZoom
-  });
-
-  const [parcels, setParcels] = useState<CadastralParcel[]>([]);
-  const [selectedParcel, setSelectedParcel] = useState<CadastralParcel | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [popupInfo, setPopupInfo] = useState<{
-    longitude: number;
-    latitude: number;
-    parcel: CadastralParcel;
-  } | null>(null);
-
-  // Load parcels when map moves
-  const loadParcels = useCallback(async () => {
-    if (viewState.zoom < 10) return;
-
-    setLoading(true);
-    try {
-      const bounds = {
-        north: viewState.latitude + 0.01,
-        south: viewState.latitude - 0.01,
-        east: viewState.longitude + 0.01,
-        west: viewState.longitude - 0.01
-      };
-
-      const parcelsData = await cadastralService.getParcelsInBounds(bounds);
-      setParcels(parcelsData);
-    } catch (error) {
-      console.error('Error loading parcels:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [viewState.latitude, viewState.longitude, viewState.zoom]);
-
-  useEffect(() => {
-    loadParcels();
-  }, [loadParcels]);
-
-  // Search functionality
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
-
-    setLoading(true);
-    try {
-      const results = await cadastralService.searchParcelsByOwner(searchQuery);
-      if (results.length > 0) {
-        const firstResult = results[0];
-        const coords = firstResult.geometry.coordinates[0];
-        const centerLng = coords.reduce((sum, coord) => sum + coord[0], 0) / coords.length;
-        const centerLat = coords.reduce((sum, coord) => sum + coord[1], 0) / coords.length;
-        
-        setViewState(prev => ({
-          ...prev,
-          longitude: centerLng,
-          latitude: centerLat,
-          zoom: 16
-        }));
-        
-        setSelectedParcel(firstResult);
-      }
-    } catch (error) {
-      console.error('Search error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Convert parcels to GeoJSON
-  const geojsonData = useMemo(() => ({
-    type: 'FeatureCollection' as const,
-    features: parcels.map(parcel => ({
-      type: 'Feature' as const,
-      properties: {
-        id: parcel.id,
-        parcel_id: parcel.parcel_id,
-        owner_name: parcel.owner_name,
-        land_use: parcel.land_use,
-        area_sqm: parcel.area_sqm,
-        status: parcel.status
-      },
-      geometry: parcel.geometry
-    }))
-  }), [parcels]);
-
-  const onClick = useCallback((event: any) => {
-    if (event.features && event.features.length > 0) {
-      const feature = event.features[0];
-      const parcel = parcels.find(p => p.id === feature.properties.id);
-      
-      if (parcel) {
-        setPopupInfo({
-          longitude: event.lngLat.lng,
-          latitude: event.lngLat.lat,
-          parcel
-        });
-      }
-    }
-  }, [parcels]);
+const CadastralMap = () => {
+  const [loading, setLoading] = useState(false)
 
   return (
     <div className="relative h-full w-full">
       {/* Search Bar */}
       <div className="absolute top-4 left-4 z-10 bg-white rounded-lg shadow-lg p-3">
         <div className="flex items-center gap-2">
-          <SearchIcon />
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="M21 21l-4.35-4.35"/>
+          </svg>
           <input
             type="text"
             placeholder="Search by owner name..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
             className="outline-none text-sm w-64"
           />
           <button 
-            onClick={handleSearch}
             disabled={loading}
             className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 disabled:opacity-50"
           >
@@ -165,102 +29,20 @@ const CadastralMap: React.FC<CadastralMapProps> = ({
         </div>
       </div>
 
-      {/* Loading indicator */}
-      {loading && (
-        <div className="absolute top-4 right-4 z-10 bg-white rounded-lg shadow-lg p-3">
-          <div className="flex items-center gap-2">
-            <LoaderIcon />
-            <span className="text-sm">Loading...</span>
+      {/* Map Placeholder */}
+      <div className="h-full w-full bg-gray-200 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-gray-700 mb-2">🗺️ Map Loading...</h2>
+          <p className="text-gray-600">Add your Mapbox token to see the interactive map</p>
+          <div className="mt-4 p-4 bg-white rounded-lg shadow">
+            <p className="text-sm text-gray-500">
+              Set NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN in your environment variables
+            </p>
           </div>
         </div>
-      )}
-
-      {/* Info Panel */}
-      {selectedParcel && (
-        <div className="absolute top-20 left-4 z-10 bg-white rounded-lg shadow-lg p-4 max-w-sm">
-          <div className="flex items-start gap-2">
-            <InfoIcon />
-            <div className="flex-1">
-              <h3 className="font-semibold text-sm">Parcel {selectedParcel.parcel_id}</h3>
-              {selectedParcel.owner_name && (
-                <p className="text-sm text-gray-600">Owner: {selectedParcel.owner_name}</p>
-              )}
-              {selectedParcel.land_use && (
-                <p className="text-sm text-gray-600">Use: {selectedParcel.land_use}</p>
-              )}
-              <p className="text-sm text-gray-600">
-                Area: {selectedParcel.area_sqm.toLocaleString()} m²
-              </p>
-              <p className="text-sm text-gray-600">Status: {selectedParcel.status}</p>
-            </div>
-            <button 
-              onClick={() => setSelectedParcel(null)}
-              className="text-gray-400 hover:text-gray-600 text-lg leading-none"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Map */}
-      <Map
-        {...viewState}
-        onMove={evt => setViewState(evt.viewState)}
-        style={{ width: '100%', height: '100%' }}
-        mapStyle="mapbox://styles/mapbox/satellite-streets-v12"
-        mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN}
-        onClick={onClick}
-        interactiveLayerIds={['parcels-fill', 'parcels-line']}
-      >
-        <Source id="parcels" type="geojson" data={geojsonData}>
-          <Layer
-            id="parcels-fill"
-            type="fill"
-            paint={{
-              'fill-color': [
-                'case',
-                ['==', ['get', 'status'], 'active'], '#22c55e',
-                ['==', ['get', 'status'], 'pending'], '#f59e0b',
-                '#ef4444'
-              ],
-              'fill-opacity': 0.3
-            }}
-          />
-          <Layer
-            id="parcels-line"
-            type="line"
-            paint={{
-              'line-color': '#1f2937',
-              'line-width': 2
-            }}
-          />
-        </Source>
-
-        {popupInfo && (
-          <Popup
-            longitude={popupInfo.longitude}
-            latitude={popupInfo.latitude}
-            onClose={() => setPopupInfo(null)}
-            closeButton={true}
-            closeOnClick={false}
-            className="max-w-sm"
-          >
-            <div className="p-2">
-              <h3 className="font-semibold text-sm">Parcel {popupInfo.parcel.parcel_id}</h3>
-              {popupInfo.parcel.owner_name && (
-                <p className="text-sm">Owner: {popupInfo.parcel.owner_name}</p>
-              )}
-              {popupInfo.parcel.land_use && (
-                <p className="text-sm">Use: {popupInfo.parcel.land_use}</p>
-              )}
-              <p className="text-sm">Area: {popupInfo.parcel.area_sqm.toLocaleString()} m²</p>
-            </div>
-          </Popup>
-        )}
-      </Map>
+      </div>
     </div>
-  );
-};
+  )
+}
 
-export default CadastralMap;
+export default CadastralMap
