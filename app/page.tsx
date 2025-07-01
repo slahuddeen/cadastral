@@ -1,13 +1,4 @@
-/* Add this to your globals.css */
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}'use client';
+'use client';
 
 import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
