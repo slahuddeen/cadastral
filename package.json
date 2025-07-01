@@ -1,5 +1,5 @@
 {
-  "name": "nextjs",
+  "name": "cadastral-mapping-system",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,7 +11,12 @@
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "next": "15.3.4"
+    "next": "15.3.4",
+    "@supabase/supabase-js": "^2.39.0",
+    "mapbox-gl": "^3.1.0",
+    "react-map-gl": "^7.1.7",
+    "@types/mapbox-gl": "^3.1.0",
+    "lucide-react": "^0.263.1"
   },
   "devDependencies": {
     "typescript": "^5",
