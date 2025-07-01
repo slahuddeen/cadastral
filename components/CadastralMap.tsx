@@ -1,7 +1,33 @@
+'use client';
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Map, { Layer, Source, Popup } from 'react-map-gl';
-import { cadastralService, CadastralParcel } from '@/lib/supabase';
+import { cadastralService, CadastralParcel } from '../lib/supabase';
+
+// Import Mapbox CSS
 import 'mapbox-gl/dist/mapbox-gl.css';
+
+// Simple SVG Icons
+const SearchIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="11" cy="11" r="8"/>
+    <path d="M21 21l-4.35-4.35"/>
+  </svg>
+);
+
+const LoaderIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+    <path d="M21 12a9 9 0 11-6.219-8.56"/>
+  </svg>
+);
+
+const InfoIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M12 16v-4"/>
+    <path d="M12 8h.01"/>
+  </svg>
+);
 
 interface CadastralMapProps {
   initialCenter?: [number, number];
@@ -9,7 +35,7 @@ interface CadastralMapProps {
 }
 
 const CadastralMap: React.FC<CadastralMapProps> = ({
-  initialCenter = [98.7, 3.52], // Default to your data area
+  initialCenter = [98.7, 3.52],
   initialZoom = 13
 }) => {
   const [viewState, setViewState] = useState({
@@ -30,11 +56,10 @@ const CadastralMap: React.FC<CadastralMapProps> = ({
 
   // Load parcels when map moves
   const loadParcels = useCallback(async () => {
-    if (viewState.zoom < 10) return; // Don't load parcels when zoomed out too far
+    if (viewState.zoom < 10) return;
 
     setLoading(true);
     try {
-      // Calculate bounds from current view
       const bounds = {
         north: viewState.latitude + 0.01,
         south: viewState.latitude - 0.01,
@@ -64,7 +89,6 @@ const CadastralMap: React.FC<CadastralMapProps> = ({
       const results = await cadastralService.searchParcelsByOwner(searchQuery);
       if (results.length > 0) {
         const firstResult = results[0];
-        // Get center of first polygon
         const coords = firstResult.geometry.coordinates[0];
         const centerLng = coords.reduce((sum, coord) => sum + coord[0], 0) / coords.length;
         const centerLat = coords.reduce((sum, coord) => sum + coord[1], 0) / coords.length;
@@ -122,7 +146,7 @@ const CadastralMap: React.FC<CadastralMapProps> = ({
       {/* Search Bar */}
       <div className="absolute top-4 left-4 z-10 bg-white rounded-lg shadow-lg p-3">
         <div className="flex items-center gap-2">
-          <Search className="w-4 h-4 text-gray-500" />
+          <SearchIcon />
           <input
             type="text"
             placeholder="Search by owner name..."
@@ -145,7 +169,7 @@ const CadastralMap: React.FC<CadastralMapProps> = ({
       {loading && (
         <div className="absolute top-4 right-4 z-10 bg-white rounded-lg shadow-lg p-3">
           <div className="flex items-center gap-2">
-            <Loader className="w-4 h-4 animate-spin" />
+            <LoaderIcon />
             <span className="text-sm">Loading...</span>
           </div>
         </div>
@@ -155,8 +179,8 @@ const CadastralMap: React.FC<CadastralMapProps> = ({
       {selectedParcel && (
         <div className="absolute top-20 left-4 z-10 bg-white rounded-lg shadow-lg p-4 max-w-sm">
           <div className="flex items-start gap-2">
-            <Info className="w-4 h-4 text-blue-500 mt-1" />
-            <div>
+            <InfoIcon />
+            <div className="flex-1">
               <h3 className="font-semibold text-sm">Parcel {selectedParcel.parcel_id}</h3>
               {selectedParcel.owner_name && (
                 <p className="text-sm text-gray-600">Owner: {selectedParcel.owner_name}</p>
@@ -171,7 +195,7 @@ const CadastralMap: React.FC<CadastralMapProps> = ({
             </div>
             <button 
               onClick={() => setSelectedParcel(null)}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-400 hover:text-gray-600 text-lg leading-none"
             >
               ×
             </button>

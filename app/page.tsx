@@ -1,14 +1,31 @@
-'use client';
+/* Add this to your globals.css */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}'use client';
 
 import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
 
+// Simple SVG Loader Icon
+const LoaderIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+    <path d="M21 12a9 9 0 11-6.219-8.56"/>
+  </svg>
+);
+
 // Dynamically import the map component to avoid SSR issues
-const CadastralMap = dynamic(() => import('@/components/CadastralMap'), {
+const CadastralMap = dynamic(() => import('../components/CadastralMap'), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-screen bg-gray-100">
       <div className="flex items-center gap-2">
+        <LoaderIcon />
         <span>Loading map...</span>
       </div>
     </div>
@@ -23,7 +40,7 @@ export default function Home() {
         <div className="absolute top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-200">
           <div className="flex items-center justify-between px-6 py-3">
             <h1 className="text-xl font-bold text-gray-900">
-              Cadastral Mapping System
+              📍 Cadastral Mapping System
             </h1>
             <div className="text-sm text-gray-600">
               Interactive Parcel Viewer
@@ -36,6 +53,7 @@ export default function Home() {
           <Suspense fallback={
             <div className="flex items-center justify-center h-full bg-gray-100">
               <div className="flex items-center gap-2">
+                <LoaderIcon />
                 <span>Initializing map...</span>
               </div>
             </div>
