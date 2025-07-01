@@ -1,34 +1,47 @@
+'use client';
+
+import dynamic from 'next/dynamic';
+import { Suspense } from 'react';
+
+// Dynamically import the map component to avoid SSR issues
+const CadastralMap = dynamic(() => import('@/components/CadastralMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-screen bg-gray-100">
+      <div className="flex items-center gap-2">
+        <span>Loading map...</span>
+      </div>
+    </div>
+  )
+});
+
 export default function Home() {
   return (
-    <main className="h-screen w-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">
-          Cadastral Mapping System
-        </h1>
-        <p className="text-gray-600 mb-8">
-          Interactive Parcel Viewer - Coming Soon
-        </p>
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md">
-          <h2 className="text-xl font-semibold mb-4">System Status</h2>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Next.js App</span>
-              <span className="text-green-600 text-sm font-semibold">✓ Ready</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Database</span>
-              <span className="text-yellow-600 text-sm font-semibold">⚠ Setup Required</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Map Service</span>
-              <span className="text-yellow-600 text-sm font-semibold">⚠ Setup Required</span>
+    <main className="h-screen w-screen overflow-hidden">
+      <div className="h-full w-full relative">
+        {/* Header */}
+        <div className="absolute top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-200">
+          <div className="flex items-center justify-between px-6 py-3">
+            <h1 className="text-xl font-bold text-gray-900">
+              Cadastral Mapping System
+            </h1>
+            <div className="text-sm text-gray-600">
+              Interactive Parcel Viewer
             </div>
           </div>
-          <div className="mt-6 pt-4 border-t">
-            <p className="text-xs text-gray-500">
-              Configure environment variables to enable full functionality
-            </p>
-          </div>
+        </div>
+
+        {/* Map Container */}
+        <div className="h-full w-full pt-16">
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-full bg-gray-100">
+              <div className="flex items-center gap-2">
+                <span>Initializing map...</span>
+              </div>
+            </div>
+          }>
+            <CadastralMap />
+          </Suspense>
         </div>
       </div>
     </main>
