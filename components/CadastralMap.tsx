@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Map, { Layer, Source, Popup } from 'react-map-gl';
 import { cadastralService, CadastralParcel } from '@/lib/supabase';
-import { Search, Loader, Info } from 'lucide-react';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface CadastralMapProps {
