@@ -107,26 +107,43 @@ const CadastralMap = () => {
   }
 
   // Layer styles for cadastral parcels
-  const parcelLayerStyle = {
-    id: 'cadastral-parcels-fill',
-    type: 'fill' as const,
-    paint: {
-      'fill-color': [
-        'case',
-        ['==', ['get', 'status'], 'active'], '#10b981',
-        ['==', ['get', 'status'], 'pending'], '#f59e0b', 
-        '#ef4444'
-      ],
-      'fill-opacity': 0.6
-    }
-  }
-
   const parcelBorderLayerStyle = {
     id: 'cadastral-parcels-border',
     type: 'line' as const,
     paint: {
       'line-color': '#374151',
       'line-width': 2
+    }
+  }
+
+  // Status-based layers for color coding
+  const activeParcelStyle = {
+    id: 'active-parcels',
+    type: 'fill' as const,
+    filter: ['==', ['get', 'status'], 'active'],
+    paint: {
+      'fill-color': '#10b981',
+      'fill-opacity': 0.6
+    }
+  }
+
+  const pendingParcelStyle = {
+    id: 'pending-parcels', 
+    type: 'fill' as const,
+    filter: ['==', ['get', 'status'], 'pending'],
+    paint: {
+      'fill-color': '#f59e0b',
+      'fill-opacity': 0.6
+    }
+  }
+
+  const inactiveParcelStyle = {
+    id: 'inactive-parcels',
+    type: 'fill' as const,
+    filter: ['all', ['!=', ['get', 'status'], 'active'], ['!=', ['get', 'status'], 'pending']],
+    paint: {
+      'fill-color': '#ef4444',
+      'fill-opacity': 0.4
     }
   }
 
@@ -249,6 +266,8 @@ const CadastralMap = () => {
             <span className="text-xs">Active</span>
             <div className="w-3 h-3 bg-yellow-500 rounded ml-2"></div>
             <span className="text-xs">Pending</span>
+            <div className="w-3 h-3 bg-red-500 rounded ml-2"></div>
+            <span className="text-xs">Inactive</span>
           </div>
         </div>
       </div>
@@ -260,13 +279,15 @@ const CadastralMap = () => {
         onMove={evt => setViewState(evt.viewState)}
         mapboxAccessToken={mapboxToken}
         mapStyle="mapbox://styles/mapbox/satellite-streets-v12"
-        interactiveLayerIds={['cadastral-parcels-fill']}
+        interactiveLayerIds={['active-parcels', 'pending-parcels', 'inactive-parcels']}
         onClick={handleMapClick}
         style={{ width: '100%', height: '100%' }}
       >
         {/* Cadastral Data Source and Layers */}
         <Source id="cadastral-data" type="geojson" data={sampleCadastralData}>
-          <Layer {...parcelLayerStyle} />
+          <Layer {...activeParcelStyle} />
+          <Layer {...pendingParcelStyle} />
+          <Layer {...inactiveParcelStyle} />
           <Layer {...parcelBorderLayerStyle} />
         </Source>
 
