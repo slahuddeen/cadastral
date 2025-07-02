@@ -1,3 +1,4 @@
+// app/admin/layout.tsx
 import Link from 'next/link'
 
 export default function AdminLayout({
@@ -27,6 +28,12 @@ export default function AdminLayout({
                   className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
                 >
                   📤 Import Data
+                </Link>
+                <Link 
+                  href="/test"
+                  className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+                >
+                  🔧 System Test
                 </Link>
               </div>
             </div>
