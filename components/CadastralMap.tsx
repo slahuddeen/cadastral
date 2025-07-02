@@ -12,25 +12,8 @@ import Map, {
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 // Sample cadastral data - replace this with your actual data source
-const sampleCadastralData: {
-  type: "FeatureCollection"
-  features: Array<{
-    type: "Feature"
-    properties: {
-      id: string
-      parcel_id: string
-      owner_name: string
-      land_use: string
-      area_sqm: number
-      status: string
-    }
-    geometry: {
-      type: "Polygon" | "MultiPolygon"
-      coordinates: number[][][] | number[][][][]
-    }
-  }>
-} = {
-  "type": "FeatureCollection",
+const sampleCadastralData = {
+  "type": "FeatureCollection" as const,
   "features": [
     {
       "type": "Feature",
@@ -113,6 +96,16 @@ const CadastralMap = () => {
   // Get Mapbox token from environment variables
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
 
+  // Helper function to extract coordinates from geometry
+  const extractCoordinates = (geometry: any): number[][] => {
+    if (geometry.type === 'Polygon') {
+      return geometry.coordinates[0] as number[][]
+    } else if (geometry.type === 'MultiPolygon') {
+      return geometry.coordinates[0][0] as number[][]
+    }
+    return []
+  }
+
   // Layer styles for cadastral parcels
   const parcelLayerStyle = {
     id: 'cadastral-parcels-fill',
@@ -163,11 +156,12 @@ const CadastralMap = () => {
 
       if (matchingFeatures.length > 0) {
         const firstMatch = matchingFeatures[0]
-        // Calculate bounds for the matched parcel
-        if (firstMatch.geometry.type === 'Polygon' && firstMatch.geometry.coordinates?.[0]) {
-          const coords = firstMatch.geometry.coordinates[0]
-          const lngs = coords.map((coord: number[]) => coord[0]).filter(lng => typeof lng === 'number')
-          const lats = coords.map((coord: number[]) => coord[1]).filter(lat => typeof lat === 'number')
+        
+        // Calculate bounds for the matched parcel using helper function
+        const coords = extractCoordinates(firstMatch.geometry)
+        if (coords.length > 0) {
+          const lngs = coords.map(coord => coord[0]).filter((lng): lng is number => typeof lng === 'number')
+          const lats = coords.map(coord => coord[1]).filter((lat): lat is number => typeof lat === 'number')
           
           if (lngs.length > 0 && lats.length > 0) {
             const bounds: [[number, number], [number, number]] = [
