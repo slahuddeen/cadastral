@@ -7,12 +7,29 @@ import Map, {
   Popup, 
   MapRef,
   ViewState,
-  MapboxEvent
+  MapLayerMouseEvent
 } from 'react-map-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 // Sample cadastral data - replace this with your actual data source
-const sampleCadastralData = {
+const sampleCadastralData: {
+  type: "FeatureCollection"
+  features: Array<{
+    type: "Feature"
+    properties: {
+      id: string
+      parcel_id: string
+      owner_name: string
+      land_use: string
+      area_sqm: number
+      status: string
+    }
+    geometry: {
+      type: "Polygon" | "MultiPolygon"
+      coordinates: number[][][] | number[][][][]
+    }
+  }>
+} = {
   "type": "FeatureCollection",
   "features": [
     {
@@ -121,13 +138,12 @@ const CadastralMap = () => {
   }
 
   // Handle map click to show parcel details
-  const handleMapClick = useCallback((event: MapboxEvent) => {
+  const handleMapClick = useCallback((event: MapLayerMouseEvent) => {
     const feature = event.features?.[0]
     if (feature && feature.geometry?.type !== 'Point' && feature.properties) {
-      const coordinates = event.lngLat
       setPopupInfo({
-        longitude: coordinates.lng,
-        latitude: coordinates.lat,
+        longitude: event.lngLat.lng,
+        latitude: event.lngLat.lat,
         properties: feature.properties
       })
     }
@@ -141,8 +157,8 @@ const CadastralMap = () => {
     try {
       // Find parcels matching the search query
       const matchingFeatures = sampleCadastralData.features.filter(feature => 
-        feature.properties.owner_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        feature.properties.parcel_id.toLowerCase().includes(searchQuery.toLowerCase())
+        feature.properties?.owner_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        feature.properties?.parcel_id?.toLowerCase().includes(searchQuery.toLowerCase())
       )
 
       if (matchingFeatures.length > 0) {
@@ -150,22 +166,28 @@ const CadastralMap = () => {
         // Calculate bounds for the matched parcel
         if (firstMatch.geometry.type === 'Polygon' && firstMatch.geometry.coordinates?.[0]) {
           const coords = firstMatch.geometry.coordinates[0]
-          const lngs = coords.map((coord: number[]) => coord[0])
-          const lats = coords.map((coord: number[]) => coord[1])
+          const lngs = coords.map((coord: number[]) => coord[0]).filter(lng => typeof lng === 'number')
+          const lats = coords.map((coord: number[]) => coord[1]).filter(lat => typeof lat === 'number')
           
-          const bounds = [
-            [Math.min(...lngs), Math.min(...lats)],
-            [Math.max(...lngs), Math.max(...lats)]
-          ] as [[number, number], [number, number]]
-          
-          mapRef.current?.fitBounds(bounds, { padding: 50, duration: 1000 })
-          
-          // Show popup for the found parcel
-          setPopupInfo({
-            longitude: (Math.min(...lngs) + Math.max(...lngs)) / 2,
-            latitude: (Math.min(...lats) + Math.max(...lats)) / 2,
-            properties: firstMatch.properties
-          })
+          if (lngs.length > 0 && lats.length > 0) {
+            const bounds: [[number, number], [number, number]] = [
+              [Math.min(...lngs), Math.min(...lats)],
+              [Math.max(...lngs), Math.max(...lats)]
+            ]
+            
+            mapRef.current?.fitBounds(bounds, { 
+              padding: 50, 
+              duration: 1000,
+              maxZoom: 16
+            })
+            
+            // Show popup for the found parcel
+            setPopupInfo({
+              longitude: (Math.min(...lngs) + Math.max(...lngs)) / 2,
+              latitude: (Math.min(...lats) + Math.max(...lats)) / 2,
+              properties: firstMatch.properties
+            })
+          }
         }
       } else {
         alert('No parcels found matching your search')
