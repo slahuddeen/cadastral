@@ -1,168 +1,158 @@
 ﻿// app/api/cadastral-data/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-
-// Sample data based on your feature object structure
-const sampleCadastralFeatures = [
-    {
-        "type": "Feature",
-        "properties": {
-            "id": "1",
-            "parcel_id": "PTPN_001",
-            "provinsi": "Sumatera Utara",
-            "kabupaten": "Langkat",
-            "nib": "12345",
-            "su": "SU-001",
-            "hak": "Hak Guna Usaha",
-            "tipeHak": "HGU",
-            "luasTertulis": "1500 m²",
-            "luasPeta": "1487 m²",
-            "sk": "SK/001/2023",
-            "tanggalSk": "2023-01-15",
-            "tanggalTerbitHak": "2023-02-01",
-            "berakhirHak": "2048-02-01",
-            "pemilik": "PT Perkebunan Nusantara",
-            "tipePemilik": "Badan Usaha",
-            "gunaTanahK": "Perkebunan",
-            "gunaTanahU": "Kebun Kelapa Sawit",
-            "terpetakan": "Ya",
-            "kasus": "Tidak Ada",
-            "pihak": "[]",
-            "solusi": "Tidak Ada",
-            "hasil": "Selesai",
-            "penggunaan": "Aktif",
-            "owner_name": "PT Perkebunan Nusantara",
-            "land_use": "Perkebunan",
-            "area_sqm": 1487,
-            "status": "active"
-        },
-        "geometry": {
-            "type": "MultiPolygon",
-            "coordinates": [
-                [
-                    [
-                        [98.61325979232788, 3.6191095821497044],
-                        [98.61319541931152, 3.618317231252732],
-                        [98.60620021820068, 3.6186812844536007],
-                        [98.60624313354492, 3.61930231604687],
-                        [98.61325979232788, 3.6191095821497044]
-                    ]
-                ],
-                [
-                    [
-                        [98.60130786895752, 3.6192594862954905],
-                        [98.60158681869507, 3.6194308052888715],
-                        [98.6056637763977, 3.6193237309218063],
-                        [98.60562086105347, 3.6190667523891875],
-                        [98.60502004623413, 3.6190025077446535],
-                        [98.60502004623413, 3.6187669440090247],
-                        [98.60152244567871, 3.618895433326955],
-                        [98.60130786895752, 3.6192594862954905]
-                    ]
-                ]
-            ]
-        }
-    },
-    {
-        "type": "Feature",
-        "properties": {
-            "id": "2",
-            "parcel_id": "PTPN_002",
-            "provinsi": "Sumatera Utara",
-            "kabupaten": "Langkat",
-            "nib": "12346",
-            "su": "SU-002",
-            "hak": "Hak Milik",
-            "tipeHak": "HM",
-            "luasTertulis": "2500 m²",
-            "luasPeta": "2487 m²",
-            "sk": "SK/002/2023",
-            "tanggalSk": "2023-01-20",
-            "tanggalTerbitHak": "2023-02-05",
-            "berakhirHak": "-",
-            "pemilik": "Ahmad Subagio",
-            "tipePemilik": "Perorangan",
-            "gunaTanahK": "Pertanian",
-            "gunaTanahU": "Sawah",
-            "terpetakan": "Ya",
-            "kasus": "Sengketa Batas",
-            "pihak": "[\"Ahmad Subagio\", \"Siti Aminah\"]",
-            "solusi": "Mediasi",
-            "hasil": "Dalam Proses",
-            "penggunaan": "Aktif",
-            "owner_name": "Ahmad Subagio",
-            "land_use": "Pertanian",
-            "area_sqm": 2487,
-            "status": "pending"
-        },
-        "geometry": {
-            "type": "Polygon",
-            "coordinates": [[
-                [98.59457015991211, 3.6337358267753075],
-                [98.59491348266602, 3.6333931941778133],
-                [98.59572887420654, 3.6334574377997484],
-                [98.5956859588623, 3.629902617178388],
-                [98.59600782394409, 3.6298812025539178],
-                [98.59583616256714, 3.624591774766614],
-                [98.59457015991211, 3.6337358267753075]
-            ]]
-        }
-    }
-]
+import { supabase } from '../../../lib/supabase'
 
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url)
         const search = searchParams.get('search')
         const bounds = searchParams.get('bounds')
+        const limit = parseInt(searchParams.get('limit') || '1000')
+        const offset = parseInt(searchParams.get('offset') || '0')
+        const filter = searchParams.get('filter') // For filtering by rights type, status, etc.
 
-        let features = [...sampleCadastralFeatures]
+        // Build the query
+        let query = supabase
+            .from('cadastral_parcels')
+            .select(`
+                id,
+                parcel_id,
+                provinsi,
+                kabupaten,
+                kecamatan,
+                desa,
+                nib,
+                su,
+                hak,
+                tipe_hak,
+                luas_tertulis,
+                luas_peta,
+                sk,
+                tanggal_sk,
+                tanggal_terbit_hak,
+                berakhir_hak,
+                pemilik,
+                tipe_pemilik,
+                guna_tanah_klasifikasi,
+                guna_tanah_utama,
+                penggunaan,
+                terpetakan,
+                kasus,
+                pihak_bersengketa,
+                solusi,
+                hasil,
+                upaya_penanganan,
+                no_peta,
+                status,
+                keterangan,
+                ST_AsGeoJSON(geometry)::json as geometry,
+                created_at,
+                updated_at
+            `)
+            .range(offset, offset + limit - 1)
+            .order('created_at', { ascending: false })
 
         // Apply search filter if provided
         if (search) {
-            const searchTerm = search.toLowerCase()
-            features = features.filter(feature => {
-                const props = feature.properties
-                return (
-                    props.owner_name?.toLowerCase().includes(searchTerm) ||
-                    props.parcel_id?.toLowerCase().includes(searchTerm) ||
-                    props.provinsi?.toLowerCase().includes(searchTerm) ||
-                    props.kabupaten?.toLowerCase().includes(searchTerm) ||
-                    props.land_use?.toLowerCase().includes(searchTerm)
-                )
-            })
+            const searchTerm = `%${search}%`
+            query = query.or(`pemilik.ilike.${searchTerm},parcel_id.ilike.${searchTerm},provinsi.ilike.${searchTerm},kabupaten.ilike.${searchTerm},penggunaan.ilike.${searchTerm},nib.ilike.${searchTerm},hak.ilike.${searchTerm}`)
         }
 
-        // Apply bounds filter if provided
+        // Apply specific filters
+        if (filter && filter !== 'all') {
+            // Filter can be rights type (HGU, HM, HP) or status (active, pending)
+            query = query.or(`tipe_hak.eq.${filter},status.eq.${filter}`)
+        }
+
+        // Apply bounds filter if provided (spatial query)
         if (bounds) {
             try {
                 const [west, south, east, north] = bounds.split(',').map(Number)
-                features = features.filter(feature => {
-                    // Simple bounds check - you might want to implement more sophisticated spatial filtering
-                    const coords = extractCoordinatesFromGeometry(feature.geometry)
-                    return coords.some(([lng, lat]) =>
-                        lng >= west && lng <= east && lat >= south && lat <= north
-                    )
-                })
+                // Create a bounding box polygon for spatial intersection
+                const bbox = `POLYGON((${west} ${south}, ${east} ${south}, ${east} ${north}, ${west} ${north}, ${west} ${south}))`
+
+                // Use PostGIS ST_Intersects for spatial filtering
+                query = query.filter('geometry', 'intersects', bbox)
             } catch (error) {
                 console.error('Invalid bounds parameter:', error)
             }
         }
 
+        const { data, error } = await query
+
+        if (error) {
+            console.error('Supabase error:', error)
+            return NextResponse.json(
+                { error: 'Database query failed: ' + error.message },
+                { status: 500 }
+            )
+        }
+
+        // Convert to GeoJSON format
+        const features = (data || []).map(record => ({
+            type: 'Feature',
+            properties: {
+                id: record.id,
+                parcel_id: record.parcel_id,
+                provinsi: record.provinsi,
+                kabupaten: record.kabupaten,
+                kecamatan: record.kecamatan,
+                desa: record.desa,
+                nib: record.nib,
+                su: record.su,
+                hak: record.hak,
+                tipe_hak: record.tipe_hak,
+                luas_tertulis: record.luas_tertulis,
+                luas_peta: record.luas_peta,
+                sk: record.sk,
+                tanggal_sk: record.tanggal_sk,
+                tanggal_terbit_hak: record.tanggal_terbit_hak,
+                berakhir_hak: record.berakhir_hak,
+                pemilik: record.pemilik,
+                tipe_pemilik: record.tipe_pemilik,
+                guna_tanah_klasifikasi: record.guna_tanah_klasifikasi,
+                guna_tanah_utama: record.guna_tanah_utama,
+                penggunaan: record.penggunaan,
+                terpetakan: record.terpetakan,
+                kasus: record.kasus,
+                pihak_bersengketa: record.pihak_bersengketa,
+                solusi: record.solusi,
+                hasil: record.hasil,
+                upaya_penanganan: record.upaya_penanganan,
+                no_peta: record.no_peta,
+                status: record.status,
+                keterangan: record.keterangan,
+                created_at: record.created_at,
+                updated_at: record.updated_at,
+
+                // Legacy fields for backward compatibility
+                owner_name: record.pemilik,
+                land_use: record.penggunaan,
+                area_sqm: record.luas_peta
+            },
+            geometry: record.geometry
+        }))
+
+        // Always return proper GeoJSON structure, even if empty
         const geoJson = {
             type: 'FeatureCollection',
-            features
+            features: features || []
         }
 
         return NextResponse.json(geoJson, {
             headers: {
-                'Cache-Control': 'public, max-age=300' // Cache for 5 minutes
+                'Cache-Control': 'public, max-age=60', // Cache for 1 minute
+                'X-Total-Count': features.length.toString(),
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
             }
         })
 
     } catch (error) {
         console.error('Error fetching cadastral data:', error)
         return NextResponse.json(
-            { error: 'Failed to fetch cadastral data' },
+            { error: 'Failed to fetch cadastral data: ' + String(error) },
             { status: 500 }
         )
     }
@@ -172,40 +162,248 @@ export async function POST(request: NextRequest) {
     try {
         const body = await request.json()
 
-        // Handle bulk data import
+        // Handle bulk data import or single parcel creation
         if (body.type === 'FeatureCollection' && body.features) {
-            // Here you would typically save to a database
-            // For now, we'll just validate and return success
+            const results = []
+            const errors = []
 
-            const validFeatures = body.features.filter((feature: any) =>
-                feature.type === 'Feature' &&
-                feature.geometry &&
-                feature.properties
-            )
+            for (const feature of body.features) {
+                try {
+                    const properties = feature.properties || {}
+
+                    // Prepare the data for insertion
+                    const insertData = {
+                        parcel_id: properties.parcel_id || `PARCEL_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                        provinsi: properties.provinsi || null,
+                        kabupaten: properties.kabupaten || null,
+                        kecamatan: properties.kecamatan || null,
+                        desa: properties.desa || null,
+                        nib: properties.nib || null,
+                        su: properties.su || null,
+                        hak: properties.hak || null,
+                        tipe_hak: properties.tipe_hak || null,
+                        luas_tertulis: properties.luas_tertulis || null,
+                        luas_peta: properties.luas_peta || properties.area_sqm || null,
+                        sk: properties.sk || null,
+                        tanggal_sk: properties.tanggal_sk || null,
+                        tanggal_terbit_hak: properties.tanggal_terbit_hak || null,
+                        berakhir_hak: properties.berakhir_hak || null,
+                        pemilik: properties.pemilik || properties.owner_name || null,
+                        tipe_pemilik: properties.tipe_pemilik || null,
+                        guna_tanah_klasifikasi: properties.guna_tanah_klasifikasi || null,
+                        guna_tanah_utama: properties.guna_tanah_utama || null,
+                        penggunaan: properties.penggunaan || properties.land_use || null,
+                        terpetakan: properties.terpetakan || null,
+                        kasus: properties.kasus || null,
+                        pihak_bersengketa: properties.pihak_bersengketa || null,
+                        solusi: properties.solusi || null,
+                        hasil: properties.hasil || null,
+                        upaya_penanganan: properties.upaya_penanganan || null,
+                        no_peta: properties.no_peta || null,
+                        status: properties.status || 'active',
+                        keterangan: properties.keterangan || null,
+                        geometry: feature.geometry ? `SRID=4326;${JSON.stringify(feature.geometry)}` : null
+                    }
+
+                    const { data, error } = await supabase
+                        .from('cadastral_parcels')
+                        .insert(insertData)
+                        .select()
+
+                    if (error) {
+                        errors.push({
+                            parcel_id: insertData.parcel_id,
+                            error: error.message,
+                            feature
+                        })
+                    } else {
+                        results.push(data[0])
+                    }
+                } catch (err) {
+                    errors.push({
+                        parcel_id: 'unknown',
+                        error: String(err),
+                        feature
+                    })
+                }
+            }
 
             return NextResponse.json({
                 success: true,
-                imported: validFeatures.length,
+                imported: results.length,
+                failed: errors.length,
                 total: body.features.length,
-                message: `Successfully processed ${validFeatures.length} parcels`
+                results,
+                errors: errors.slice(0, 10), // Limit error details to prevent huge responses
+                message: `Successfully processed ${results.length} parcels. ${errors.length} failed.`
             })
         }
 
-        return NextResponse.json(
-            { error: 'Invalid data format' },
-            { status: 400 }
-        )
+        // Handle single parcel creation
+        const properties = body.properties || {}
+        const insertData = {
+            parcel_id: properties.parcel_id || body.parcel_id || `PARCEL_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            provinsi: properties.provinsi || body.provinsi || null,
+            kabupaten: properties.kabupaten || body.kabupaten || null,
+            kecamatan: properties.kecamatan || body.kecamatan || null,
+            desa: properties.desa || body.desa || null,
+            nib: properties.nib || body.nib || null,
+            su: properties.su || body.su || null,
+            hak: properties.hak || body.hak || null,
+            tipe_hak: properties.tipe_hak || body.tipe_hak || null,
+            luas_tertulis: properties.luas_tertulis || body.luas_tertulis || null,
+            luas_peta: properties.luas_peta || body.luas_peta || properties.area_sqm || body.area_sqm || null,
+            sk: properties.sk || body.sk || null,
+            tanggal_sk: properties.tanggal_sk || body.tanggal_sk || null,
+            tanggal_terbit_hak: properties.tanggal_terbit_hak || body.tanggal_terbit_hak || null,
+            berakhir_hak: properties.berakhir_hak || body.berakhir_hak || null,
+            pemilik: properties.pemilik || body.pemilik || properties.owner_name || body.owner_name || null,
+            tipe_pemilik: properties.tipe_pemilik || body.tipe_pemilik || null,
+            guna_tanah_klasifikasi: properties.guna_tanah_klasifikasi || body.guna_tanah_klasifikasi || null,
+            guna_tanah_utama: properties.guna_tanah_utama || body.guna_tanah_utama || null,
+            penggunaan: properties.penggunaan || body.penggunaan || properties.land_use || body.land_use || null,
+            terpetakan: properties.terpetakan || body.terpetakan || null,
+            kasus: properties.kasus || body.kasus || null,
+            pihak_bersengketa: properties.pihak_bersengketa || body.pihak_bersengketa || null,
+            solusi: properties.solusi || body.solusi || null,
+            hasil: properties.hasil || body.hasil || null,
+            upaya_penanganan: properties.upaya_penanganan || body.upaya_penanganan || null,
+            no_peta: properties.no_peta || body.no_peta || null,
+            status: properties.status || body.status || 'active',
+            keterangan: properties.keterangan || body.keterangan || null,
+            geometry: body.geometry ? `SRID=4326;${JSON.stringify(body.geometry)}` : null
+        }
+
+        const { data, error } = await supabase
+            .from('cadastral_parcels')
+            .insert(insertData)
+            .select()
+
+        if (error) {
+            return NextResponse.json(
+                { error: error.message, details: error },
+                { status: 400 }
+            )
+        }
+
+        return NextResponse.json({
+            success: true,
+            data: data[0],
+            message: 'Parcel created successfully'
+        })
 
     } catch (error) {
-        console.error('Error processing cadastral data:', error)
+        console.error('Error creating cadastral data:', error)
         return NextResponse.json(
-            { error: 'Failed to process data' },
+            { error: 'Failed to create data: ' + String(error) },
             { status: 500 }
         )
     }
 }
 
-// Helper function to extract coordinates from geometry
+export async function PUT(request: NextRequest) {
+    try {
+        const body = await request.json()
+        const { id, ...updateData } = body
+
+        if (!id) {
+            return NextResponse.json(
+                { error: 'Parcel ID is required for updates' },
+                { status: 400 }
+            )
+        }
+
+        // Handle geometry updates
+        if (updateData.geometry) {
+            updateData.geometry = `SRID=4326;${JSON.stringify(updateData.geometry)}`
+        }
+
+        const { data, error } = await supabase
+            .from('cadastral_parcels')
+            .update(updateData)
+            .eq('id', id)
+            .select()
+
+        if (error) {
+            return NextResponse.json(
+                { error: error.message },
+                { status: 400 }
+            )
+        }
+
+        if (!data || data.length === 0) {
+            return NextResponse.json(
+                { error: 'Parcel not found' },
+                { status: 404 }
+            )
+        }
+
+        return NextResponse.json({
+            success: true,
+            data: data[0],
+            message: 'Parcel updated successfully'
+        })
+
+    } catch (error) {
+        console.error('Error updating cadastral data:', error)
+        return NextResponse.json(
+            { error: 'Failed to update data: ' + String(error) },
+            { status: 500 }
+        )
+    }
+}
+
+export async function DELETE(request: NextRequest) {
+    try {
+        const { searchParams } = new URL(request.url)
+        const id = searchParams.get('id')
+
+        if (!id) {
+            return NextResponse.json(
+                { error: 'Parcel ID is required for deletion' },
+                { status: 400 }
+            )
+        }
+
+        const { error } = await supabase
+            .from('cadastral_parcels')
+            .delete()
+            .eq('id', id)
+
+        if (error) {
+            return NextResponse.json(
+                { error: error.message },
+                { status: 400 }
+            )
+        }
+
+        return NextResponse.json({
+            success: true,
+            message: 'Parcel deleted successfully'
+        })
+
+    } catch (error) {
+        console.error('Error deleting cadastral data:', error)
+        return NextResponse.json(
+            { error: 'Failed to delete data: ' + String(error) },
+            { status: 500 }
+        )
+    }
+}
+
+// Handle CORS preflight requests
+export async function OPTIONS(request: NextRequest) {
+    return new NextResponse(null, {
+        status: 200,
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+    })
+}
+
+// Helper function to extract coordinates from geometry (for backward compatibility)
 function extractCoordinatesFromGeometry(geometry: any): number[][] {
     const coords: number[][] = []
 

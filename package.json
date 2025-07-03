@@ -11,17 +11,23 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.50.2",
     "@types/mapbox-gl": "^3.4.1",
+    "adm-zip": "^0.5.16",
     "mapbox-gl": "^3.13.0",
     "next": "15.3.4",
+    "papaparse": "^5.5.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-map-gl": "^7.1.9"
+    "react-map-gl": "^7.1.9",
+    "shapefile": "^0.6.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/adm-zip": "^0.5.7",
     "@types/node": "^20",
+    "@types/papaparse": "^5.3.16",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/shapefile": "^0.6.4",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
