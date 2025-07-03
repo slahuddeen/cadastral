@@ -16,6 +16,7 @@ interface PopupInfo {
     longitude: number
     latitude: number
     properties: any
+    geometry: any
 }
 
 interface CadastralData {
@@ -104,15 +105,7 @@ const CadastralMap = () => {
         })
     } : null
 
-    // Layer styles for different parcel types
-    const getParcelColor = (properties: any) => {
-        const tipeHak = properties.tipe_hak
-        if (tipeHak === 'Hak Guna Usaha' || tipeHak === 'HGU') return '#10b981' // Green
-        if (tipeHak === 'Hak Milik' || tipeHak === 'HM') return '#3b82f6' // Blue
-        if (tipeHak === 'Hak Pakai' || tipeHak === 'HP') return '#f59e0b' // Orange
-        if (properties.status === 'pending') return '#ef4444' // Red
-        return '#6b7280' // Gray default
-    }
+    // Filter data based on selected filter
 
     // Layer styles
     const parcelFillLayer = {
@@ -160,16 +153,17 @@ const CadastralMap = () => {
     // Handle map click to show parcel details
     const handleMapClick = useCallback((event: MapLayerMouseEvent) => {
         const feature = event.features?.[0]
-        if (feature && feature.properties) {
+        if (feature && feature.properties && feature.geometry) {
             setPopupInfo({
                 longitude: event.lngLat.lng,
                 latitude: event.lngLat.lat,
-                properties: feature.properties
+                properties: feature.properties,
+                geometry: feature.geometry
             })
 
             // Highlight the clicked parcel
             if (mapRef.current) {
-                mapRef.current.setFilter('cadastral-parcels-highlight', [
+                mapRef.current.getMap().setFilter('cadastral-parcels-highlight', [
                     '==', ['get', 'id'], feature.properties.id
                 ])
             }
@@ -407,7 +401,7 @@ const CadastralMap = () => {
                             setPopupInfo(null)
                             // Clear highlight
                             if (mapRef.current) {
-                                mapRef.current.setFilter('cadastral-parcels-highlight', ['==', ['get', 'id'], ''])
+                                mapRef.current.getMap().setFilter('cadastral-parcels-highlight', ['==', ['get', 'id'], ''])
                             }
                         }}
                         closeButton={true}
@@ -481,8 +475,8 @@ const CadastralMap = () => {
                                 <div className="border-t pt-2">
                                     <div><strong>Status:</strong>
                                         <span className={`ml-1 px-2 py-0.5 rounded text-xs ${popupInfo.properties.status === 'active' ? 'bg-green-100 text-green-800' :
-                                                popupInfo.properties.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                                    'bg-gray-100 text-gray-800'
+                                            popupInfo.properties.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                                'bg-gray-100 text-gray-800'
                                             }`}>
                                             {popupInfo.properties.status || 'Unknown'}
                                         </span>
@@ -499,7 +493,7 @@ const CadastralMap = () => {
                                 </button>
                                 <button
                                     onClick={() => {
-                                        const coords = extractCoordinates(popupInfo.properties.geometry)
+                                        const coords = extractCoordinates(popupInfo.geometry)
                                         if (coords.length > 0) {
                                             const lngs = coords.map(c => c[0])
                                             const lats = coords.map(c => c[1])
