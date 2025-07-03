@@ -20,24 +20,21 @@ export default function ImportPage() {
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0]
         if (selectedFile) {
-            // Accept both ZIP files (for shapefiles) and GeoJSON files
             const validTypes = [
-                'application/zip',
-                'application/x-zip-compressed',
                 'application/json',
                 'application/geo+json'
             ]
 
             const isValidType = validTypes.includes(selectedFile.type) ||
-                selectedFile.name.endsWith('.zip') ||
                 selectedFile.name.endsWith('.geojson') ||
                 selectedFile.name.endsWith('.json')
 
             if (isValidType) {
                 setFile(selectedFile)
                 setResult(null)
+                console.log('File selected:', selectedFile.name)
             } else {
-                alert('Please select a valid file: ZIP file containing shapefiles or GeoJSON file')
+                alert('Please select a valid GeoJSON file (.json or .geojson)')
             }
         }
     }
@@ -45,12 +42,15 @@ export default function ImportPage() {
     const handleUpload = async () => {
         if (!file) return
 
+        console.log('Starting upload for:', file.name)
         setUploading(true)
         setUploadProgress(0)
 
         try {
             const formData = new FormData()
             formData.append('file', file)
+
+            console.log('Sending request to /api/upload-cadastral-data')
 
             // Simulate progress for UX
             const progressInterval = setInterval(() => {
@@ -71,8 +71,16 @@ export default function ImportPage() {
             clearInterval(progressInterval)
             setUploadProgress(100)
 
+            console.log('Response status:', response.status)
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`)
+            }
+
             const result = await response.json()
+            console.log('Upload result:', result)
             setResult(result)
+
         } catch (error) {
             console.error('Upload failed:', error)
             setResult({
@@ -102,7 +110,7 @@ export default function ImportPage() {
 
                         <input
                             type="file"
-                            accept=".zip,.json,.geojson"
+                            accept=".json,.geojson"
                             onChange={handleFileSelect}
                             className="hidden"
                             id="file-upload"
@@ -118,7 +126,6 @@ export default function ImportPage() {
 
                         <div className="text-sm text-gray-500 mt-2 space-y-1">
                             <p><strong>Supported formats:</strong></p>
-                            <p>• ZIP files containing shapefiles (.shp, .dbf, .shx, .prj)</p>
                             <p>• GeoJSON files (.json, .geojson)</p>
                             <p><strong>Maximum file size:</strong> 100MB</p>
                         </div>
@@ -182,14 +189,14 @@ export default function ImportPage() {
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <polyline points="20,6 9,17 4,12" />
                                 </svg>
-                                <span className="font-medium">Import completed successfully!</span>
+                                <span className="font-medium">Upload completed successfully!</span>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div className="bg-green-50 p-4 rounded-lg">
-                                    <div className="font-medium text-green-800">✅ Successfully Imported</div>
+                                    <div className="font-medium text-green-800">✅ Successfully Processed</div>
                                     <div className="text-2xl font-bold text-green-600">{result.imported || 0}</div>
-                                    <div className="text-green-700">cadastral parcels</div>
+                                    <div className="text-green-700">features</div>
                                 </div>
 
                                 <div className="bg-red-50 p-4 rounded-lg">
@@ -199,18 +206,19 @@ export default function ImportPage() {
                                 </div>
                             </div>
 
-                            {result.errors && result.errors.length > 0 && (
-                                <div className="mt-4">
-                                    <h3 className="font-medium text-gray-800 mb-2">Error Details:</h3>
-                                    <div className="bg-gray-50 p-3 rounded max-h-40 overflow-y-auto">
-                                        {result.errors.map((error, index) => (
-                                            <div key={index} className="text-sm text-red-600 mb-1">
-                                                Row {error.index + 1}: {error.message}
-                                            </div>
-                                        ))}
-                                    </div>
+                            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded">
+                                <p className="text-sm text-green-800">
+                                    <strong>✅ Success!</strong> Your cadastral data has been imported into the database and is now available on the map.
+                                </p>
+                                <div className="mt-2">
+                                    <a
+                                        href="/"
+                                        className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                        🗺️ View parcels on map →
+                                    </a>
                                 </div>
-                            )}
+                            </div>
                         </div>
                     ) : (
                         <div className="flex items-center gap-2 text-red-600">
@@ -224,32 +232,6 @@ export default function ImportPage() {
                     )}
                 </div>
             )}
-
-            {/* Data Mapping Guide */}
-            <div className="bg-blue-50 rounded-lg p-6">
-                <h2 className="text-lg font-semibold mb-4 text-blue-800">📋 Data Field Mapping</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <h3 className="font-medium text-blue-800 mb-2">Required Fields:</h3>
-                        <ul className="space-y-1 text-blue-700">
-                            <li>• parcel_id (unique identifier)</li>
-                            <li>• geometry (spatial data)</li>
-                            <li>• provinsi (province)</li>
-                            <li>• kabupaten (regency)</li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h3 className="font-medium text-blue-800 mb-2">Supported Fields:</h3>
-                        <ul className="space-y-1 text-blue-700">
-                            <li>• pemilik (owner)</li>
-                            <li>• tipe_hak (rights type)</li>
-                            <li>• luas_peta (area)</li>
-                            <li>• penggunaan (land use)</li>
-                            <li>• And many more...</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
         </div>
     )
 }

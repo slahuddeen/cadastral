@@ -2,10 +2,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '../../../lib/supabase'
 
-// install these packages:
-// npm install adm-zip shapefile
-// npm install @types/adm-zip
-
 interface CadastralRecord {
     parcel_id: string
     provinsi?: string
@@ -40,13 +36,14 @@ interface CadastralRecord {
 }
 
 function mapFieldNames(properties: any): Partial<CadastralRecord> {
-    // Map various field name variations to our standard schema
     const fieldMap: { [key: string]: string } = {
         // Administrative
         'PROPINSI': 'provinsi',
+        'PROVINSI': 'provinsi',
         'KABUPATEN': 'kabupaten',
         'KECAMATAN': 'kecamatan',
         'DESA': 'desa',
+        'KELURAHAN': 'desa',
 
         // Identification
         'NIB': 'nib',
@@ -58,6 +55,7 @@ function mapFieldNames(properties: any): Partial<CadastralRecord> {
         // Areas
         'LUASTERTUL': 'luas_tertulis',
         'LUAS_TERTUL': 'luas_tertulis',
+        'LUAS_TERTULIS': 'luas_tertulis',
         'LUASPETA': 'luas_peta',
         'LUAS_PETA': 'luas_peta',
         'area_sqm': 'luas_peta',
@@ -65,62 +63,91 @@ function mapFieldNames(properties: any): Partial<CadastralRecord> {
         // Legal documents
         'SK': 'sk',
         'TANGGALSK': 'tanggal_sk',
+        'TANGGAL_SK': 'tanggal_sk',
         'TGLTERBITH': 'tanggal_terbit_hak',
+        'TANGGAL_TERBIT_HAK': 'tanggal_terbit_hak',
         'BERAKHIRHA': 'berakhir_hak',
+        'BERAKHIR_HAK': 'berakhir_hak',
 
         // Ownership
         'PEMILIK': 'pemilik',
         'owner_name': 'pemilik',
         'TIPEPEMILI': 'tipe_pemilik',
+        'TIPE_PEMILIK': 'tipe_pemilik',
 
         // Land use
         'GUNATANAHK': 'guna_tanah_klasifikasi',
+        'GUNA_TANAH_KLASIFIKASI': 'guna_tanah_klasifikasi',
         'GUNATANAHU': 'guna_tanah_utama',
+        'GUNA_TANAH_UTAMA': 'guna_tanah_utama',
         'land_use': 'penggunaan',
         'PENGGUNAAN': 'penggunaan',
 
-        // Status
+        // Status and issues
         'TERPETAKAN': 'terpetakan',
         'Kasus': 'kasus',
+        'KASUS': 'kasus',
         'Pihak': 'pihak_bersengketa',
+        'PIHAK_BERSENGKETA': 'pihak_bersengketa',
         'Solusi': 'solusi',
+        'SOLUSI': 'solusi',
         'Hasil': 'hasil',
+        'HASIL': 'hasil',
+        'UPAYA_PENANGANAN': 'upaya_penanganan',
         'Keterangan': 'keterangan',
+        'KETERANGAN': 'keterangan',
         'NoPeta': 'no_peta',
+        'NO_PETA': 'no_peta',
         'Status': 'status',
+        'STATUS': 'status',
         'status': 'status'
     }
 
     const mapped: any = {}
 
-    // Map known fields
     Object.keys(properties).forEach(key => {
         const mappedKey = fieldMap[key] || key.toLowerCase()
         let value = properties[key]
 
         // Handle special cases
-        if (mappedKey === 'pihak_bersengketa' && typeof value === 'string') {
-            try {
-                value = value === '[]' ? [] : JSON.parse(value)
-            } catch {
-                value = value ? [value] : []
+        if (mappedKey === 'pihak_bersengketa') {
+            if (typeof value === 'string') {
+                try {
+                    value = value === '[]' || value === '' || value === '-' ? [] : JSON.parse(value)
+                } catch {
+                    value = value ? [value] : []
+                }
+            } else if (Array.isArray(value)) {
+                value = value
+            } else {
+                value = []
             }
         }
 
         // Convert numeric strings to numbers for area fields
-        if (['luas_tertulis', 'luas_peta'].includes(mappedKey) && typeof value === 'string') {
-            const numValue = parseFloat(value.replace(/[^\d.-]/g, ''))
-            value = isNaN(numValue) ? null : numValue
+        if (['luas_tertulis', 'luas_peta'].includes(mappedKey) && value) {
+            if (typeof value === 'string') {
+                const numValue = parseFloat(value.replace(/[^\d.-]/g, ''))
+                value = isNaN(numValue) ? null : numValue
+            }
         }
 
         // Handle date fields
         if (['tanggal_sk', 'tanggal_terbit_hak', 'berakhir_hak'].includes(mappedKey) && value) {
-            // Try to parse various date formats
-            const dateValue = new Date(value)
-            value = isNaN(dateValue.getTime()) ? null : dateValue.toISOString().split('T')[0]
+            if (value !== '-' && value !== '') {
+                const dateValue = new Date(value)
+                value = isNaN(dateValue.getTime()) ? null : dateValue.toISOString().split('T')[0]
+            } else {
+                value = null
+            }
         }
 
-        mapped[mappedKey] = value === '' || value === '-' ? null : value
+        // Clean empty values
+        if (value === '' || value === '-' || value === null || value === undefined) {
+            value = null
+        }
+
+        mapped[mappedKey] = value
     })
 
     return mapped
@@ -154,7 +181,7 @@ async function processGeoJSON(geoJson: any): Promise<{ success: CadastralRecord[
         } catch (error) {
             errors.push({
                 index: i,
-                message: `Error processing feature: ${error}`,
+                message: `Error processing feature ${i}: ${error}`,
                 feature: features[i]
             })
         }
@@ -163,36 +190,17 @@ async function processGeoJSON(geoJson: any): Promise<{ success: CadastralRecord[
     return { success, errors }
 }
 
-async function processShapefile(zipBuffer: Buffer): Promise<{ success: CadastralRecord[], errors: any[] }> {
-    try {
-        // For now, return a placeholder implementation
-        // In a real implementation, you would:
-        // 1. Extract the ZIP file
-        // 2. Find .shp, .dbf, .shx, .prj files
-        // 3. Use a shapefile library to parse them
-        // 4. Convert to GeoJSON format
-        // 5. Process with processGeoJSON()
-
-        return {
-            success: [],
-            errors: [{
-                index: 0,
-                message: "Shapefile processing not yet implemented. Please convert to GeoJSON first."
-            }]
-        }
-    } catch (error) {
-        return {
-            success: [],
-            errors: [{
-                index: 0,
-                message: `Error processing shapefile: ${error}`
-            }]
-        }
-    }
+export async function GET() {
+    return NextResponse.json({
+        message: 'Upload API is working!',
+        timestamp: new Date().toISOString()
+    })
 }
 
 export async function POST(request: NextRequest) {
     try {
+        console.log('Upload API called!')
+
         const formData = await request.formData()
         const file = formData.get('file') as File
 
@@ -203,31 +211,38 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        const buffer = Buffer.from(await file.arrayBuffer())
-        let processResult: { success: CadastralRecord[], errors: any[] }
+        console.log('File received:', file.name, file.size, 'bytes')
 
-        // Determine file type and process accordingly
+        // Process file based on type
         if (file.name.endsWith('.zip')) {
-            processResult = await processShapefile(buffer)
-        } else if (file.name.endsWith('.json') || file.name.endsWith('.geojson')) {
-            const geoJson = JSON.parse(buffer.toString('utf-8'))
-            processResult = await processGeoJSON(geoJson)
-        } else {
             return NextResponse.json(
-                { success: false, message: 'Unsupported file format' },
+                { success: false, message: 'Shapefile support coming soon. Please use GeoJSON for now.' },
                 { status: 400 }
             )
-        }
+        } else if (file.name.endsWith('.json') || file.name.endsWith('.geojson')) {
+            const buffer = Buffer.from(await file.arrayBuffer())
+            let content = buffer.toString('utf-8')
 
-        // Insert successful records into database
-        let imported = 0
-        const insertErrors: any[] = []
+            // Remove BOM (Byte Order Mark) if present
+            if (content.charCodeAt(0) === 0xFEFF) {
+                content = content.slice(1)
+            }
 
-        for (const record of processResult.success) {
-            try {
-                const { error } = await supabase
-                    .from('cadastral_parcels')
-                    .insert({
+            console.log('Content preview:', content.substring(0, 100))
+            const geoJson = JSON.parse(content)
+
+            // Process the GeoJSON
+            const processResult = await processGeoJSON(geoJson)
+            console.log(`Processed ${processResult.success.length} features, ${processResult.errors.length} errors`)
+
+            // Insert into database
+            let imported = 0
+            const insertErrors: any[] = []
+
+            for (const record of processResult.success) {
+                try {
+                    // Prepare data for insertion
+                    const insertData = {
                         parcel_id: record.parcel_id,
                         provinsi: record.provinsi,
                         kabupaten: record.kabupaten,
@@ -256,65 +271,63 @@ export async function POST(request: NextRequest) {
                         upaya_penanganan: record.upaya_penanganan,
                         no_peta: record.no_peta,
                         status: record.status,
-                        keterangan: record.keterangan,
-                        geometry: `SRID=4326;${JSON.stringify(record.geometry)}`
-                    })
+                        keterangan: record.keterangan
+                        // Note: We'll handle geometry separately to avoid PostGIS compilation issues
+                    }
 
-                if (error) {
+                    console.log(`Inserting parcel: ${record.parcel_id}`)
+
+                    const { data, error } = await supabase
+                        .from('cadastral_parcels')
+                        .insert(insertData)
+                        .select('id')
+
+                    if (error) {
+                        console.error(`Insert error for ${record.parcel_id}:`, error)
+                        insertErrors.push({
+                            parcel_id: record.parcel_id,
+                            message: error.message,
+                            details: error
+                        })
+                    } else {
+                        imported++
+                        console.log(`Successfully inserted: ${record.parcel_id}`)
+
+                        // TODO: Add geometry insertion here when PostGIS is properly configured
+                        // For now, geometry will be handled in a future update
+                    }
+                } catch (error) {
+                    console.error(`Exception inserting ${record.parcel_id}:`, error)
                     insertErrors.push({
                         parcel_id: record.parcel_id,
-                        message: error.message
+                        message: String(error)
                     })
-                } else {
-                    imported++
                 }
-            } catch (error) {
-                insertErrors.push({
-                    parcel_id: record.parcel_id,
-                    message: String(error)
-                })
             }
+
+            const allErrors = [...processResult.errors, ...insertErrors]
+
+            console.log(`Import complete: ${imported} imported, ${allErrors.length} failed`)
+
+            return NextResponse.json({
+                success: true,
+                imported,
+                failed: allErrors.length,
+                total: processResult.success.length + processResult.errors.length,
+                errors: allErrors.slice(0, 10), // Limit error details
+                message: `Successfully imported ${imported} parcels. ${allErrors.length} failed.${allErrors.length > 0 ? ' Geometry data will be supported in a future update.' : ''}`
+            })
+        } else {
+            return NextResponse.json(
+                { success: false, message: 'Unsupported file format. Please use GeoJSON (.json or .geojson).' },
+                { status: 400 }
+            )
         }
-
-        const allErrors = [...processResult.errors, ...insertErrors]
-
-        return NextResponse.json({
-            success: true,
-            imported,
-            failed: allErrors.length,
-            total: processResult.success.length + processResult.errors.length,
-            errors: allErrors.slice(0, 10), // Limit error details
-            message: `Successfully imported ${imported} parcels. ${allErrors.length} failed.`
-        })
 
     } catch (error) {
         console.error('Upload error:', error)
         return NextResponse.json(
-            {
-                success: false,
-                message: 'Server error: ' + String(error)
-            },
-            { status: 500 }
-        )
-    }
-}
-
-export async function GET() {
-    try {
-        const { data, error } = await supabase
-            .from('cadastral_parcels')
-            .select('count')
-            .single()
-
-        if (error) throw error
-
-        return NextResponse.json({
-            total_parcels: data?.count || 0,
-            message: 'Cadastral data statistics'
-        })
-    } catch (error) {
-        return NextResponse.json(
-            { error: 'Failed to fetch statistics' },
+            { success: false, message: `Server error: ${error}` },
             { status: 500 }
         )
     }
