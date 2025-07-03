@@ -1,6 +1,8 @@
 // app/api/upload-cadastral-data/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '../../../lib/supabase'
+import AdmZip from 'adm-zip'
+import shapefile from 'shapefile'
 
 interface CadastralRecord {
     parcel_id: string
@@ -153,6 +155,88 @@ function mapFieldNames(properties: any): Partial<CadastralRecord> {
     return mapped
 }
 
+async function processShapefile(zipBuffer: Buffer): Promise<{ success: CadastralRecord[], errors: any[] }> {
+    const success: CadastralRecord[] = []
+    const errors: any[] = []
+
+    try {
+        console.log('Processing shapefile ZIP...')
+        const zip = new AdmZip(zipBuffer)
+        const entries = zip.getEntries()
+
+        // Find .shp file
+        const shpEntry = entries.find(entry => entry.entryName.toLowerCase().endsWith('.shp'))
+        if (!shpEntry) {
+            throw new Error('No .shp file found in ZIP archive')
+        }
+
+        // Find .dbf file (required for attributes)
+        const dbfEntry = entries.find(entry => entry.entryName.toLowerCase().endsWith('.dbf'))
+        if (!dbfEntry) {
+            throw new Error('No .dbf file found in ZIP archive')
+        }
+
+        console.log(`Found shapefile: ${shpEntry.entryName}`)
+
+        // Extract files to buffers
+        const shpBuffer = shpEntry.getData()
+        const dbfBuffer = dbfEntry.getData()
+
+        // Read shapefile using shapefile library
+        const features: any[] = []
+
+        // Use shapefile.read with buffers
+        const source = await shapefile.read(shpBuffer, dbfBuffer)
+
+        if (source.type === 'FeatureCollection') {
+            features.push(...source.features)
+        } else if (source.features) {
+            features.push(...source.features)
+        } else {
+            features.push(source)
+        }
+
+        console.log(`Processing ${features.length} features from shapefile`)
+
+        // Process each feature
+        for (let i = 0; i < features.length; i++) {
+            try {
+                const feature = features[i]
+                const properties = mapFieldNames(feature.properties || {})
+
+                // Generate parcel_id if not provided
+                const parcel_id = properties.parcel_id ||
+                    properties.nib ||
+                    properties.hak ||
+                    `PARCEL_${Date.now()}_${i}`
+
+                const record: CadastralRecord = {
+                    parcel_id,
+                    ...properties,
+                    geometry: feature.geometry,
+                    status: properties.status || 'active'
+                }
+
+                success.push(record)
+            } catch (error) {
+                console.error(`Error processing feature ${i}:`, error)
+                errors.push({
+                    index: i,
+                    message: `Error processing feature ${i}: ${error}`,
+                    feature: features[i]
+                })
+            }
+        }
+
+        console.log(`Successfully processed ${success.length} features, ${errors.length} errors`)
+        return { success, errors }
+
+    } catch (error) {
+        console.error('Error processing shapefile:', error)
+        throw new Error(`Failed to process shapefile: ${error}`)
+    }
+}
+
 async function processGeoJSON(geoJson: any): Promise<{ success: CadastralRecord[], errors: any[] }> {
     const success: CadastralRecord[] = []
     const errors: any[] = []
@@ -193,7 +277,8 @@ async function processGeoJSON(geoJson: any): Promise<{ success: CadastralRecord[
 export async function GET() {
     return NextResponse.json({
         message: 'Upload API is working!',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        supportedFormats: ['GeoJSON (.json, .geojson)', 'Shapefile (.zip)']
     })
 }
 
@@ -213,14 +298,15 @@ export async function POST(request: NextRequest) {
 
         console.log('File received:', file.name, file.size, 'bytes')
 
+        const buffer = Buffer.from(await file.arrayBuffer())
+        let processResult: { success: CadastralRecord[], errors: any[] }
+
         // Process file based on type
-        if (file.name.endsWith('.zip')) {
-            return NextResponse.json(
-                { success: false, message: 'Shapefile support coming soon. Please use GeoJSON for now.' },
-                { status: 400 }
-            )
-        } else if (file.name.endsWith('.json') || file.name.endsWith('.geojson')) {
-            const buffer = Buffer.from(await file.arrayBuffer())
+        if (file.name.toLowerCase().endsWith('.zip')) {
+            console.log('Processing as shapefile ZIP...')
+            processResult = await processShapefile(buffer)
+        } else if (file.name.toLowerCase().endsWith('.json') || file.name.toLowerCase().endsWith('.geojson')) {
+            console.log('Processing as GeoJSON...')
             let content = buffer.toString('utf-8')
 
             // Remove BOM (Byte Order Mark) if present
@@ -228,101 +314,101 @@ export async function POST(request: NextRequest) {
                 content = content.slice(1)
             }
 
-            console.log('Content preview:', content.substring(0, 100))
             const geoJson = JSON.parse(content)
-
-            // Process the GeoJSON
-            const processResult = await processGeoJSON(geoJson)
-            console.log(`Processed ${processResult.success.length} features, ${processResult.errors.length} errors`)
-
-            // Insert into database
-            let imported = 0
-            const insertErrors: any[] = []
-
-            for (const record of processResult.success) {
-                try {
-                    // Prepare data for insertion
-                    const insertData = {
-                        parcel_id: record.parcel_id,
-                        provinsi: record.provinsi,
-                        kabupaten: record.kabupaten,
-                        kecamatan: record.kecamatan,
-                        desa: record.desa,
-                        nib: record.nib,
-                        su: record.su,
-                        hak: record.hak,
-                        tipe_hak: record.tipe_hak,
-                        luas_tertulis: record.luas_tertulis,
-                        luas_peta: record.luas_peta,
-                        sk: record.sk,
-                        tanggal_sk: record.tanggal_sk,
-                        tanggal_terbit_hak: record.tanggal_terbit_hak,
-                        berakhir_hak: record.berakhir_hak,
-                        pemilik: record.pemilik,
-                        tipe_pemilik: record.tipe_pemilik,
-                        guna_tanah_klasifikasi: record.guna_tanah_klasifikasi,
-                        guna_tanah_utama: record.guna_tanah_utama,
-                        penggunaan: record.penggunaan,
-                        terpetakan: record.terpetakan,
-                        kasus: record.kasus,
-                        pihak_bersengketa: record.pihak_bersengketa,
-                        solusi: record.solusi,
-                        hasil: record.hasil,
-                        upaya_penanganan: record.upaya_penanganan,
-                        no_peta: record.no_peta,
-                        status: record.status,
-                        keterangan: record.keterangan
-                        // Note: We'll handle geometry separately to avoid PostGIS compilation issues
-                    }
-
-                    console.log(`Inserting parcel: ${record.parcel_id}`)
-
-                    const { data, error } = await supabase
-                        .from('cadastral_parcels')
-                        .insert(insertData)
-                        .select('id')
-
-                    if (error) {
-                        console.error(`Insert error for ${record.parcel_id}:`, error)
-                        insertErrors.push({
-                            parcel_id: record.parcel_id,
-                            message: error.message,
-                            details: error
-                        })
-                    } else {
-                        imported++
-                        console.log(`Successfully inserted: ${record.parcel_id}`)
-
-                        // TODO: Add geometry insertion here when PostGIS is properly configured
-                        // For now, geometry will be handled in a future update
-                    }
-                } catch (error) {
-                    console.error(`Exception inserting ${record.parcel_id}:`, error)
-                    insertErrors.push({
-                        parcel_id: record.parcel_id,
-                        message: String(error)
-                    })
-                }
-            }
-
-            const allErrors = [...processResult.errors, ...insertErrors]
-
-            console.log(`Import complete: ${imported} imported, ${allErrors.length} failed`)
-
-            return NextResponse.json({
-                success: true,
-                imported,
-                failed: allErrors.length,
-                total: processResult.success.length + processResult.errors.length,
-                errors: allErrors.slice(0, 10), // Limit error details
-                message: `Successfully imported ${imported} parcels. ${allErrors.length} failed.${allErrors.length > 0 ? ' Geometry data will be supported in a future update.' : ''}`
-            })
+            processResult = await processGeoJSON(geoJson)
         } else {
             return NextResponse.json(
-                { success: false, message: 'Unsupported file format. Please use GeoJSON (.json or .geojson).' },
+                {
+                    success: false,
+                    message: 'Unsupported file format. Please use GeoJSON (.json or .geojson) or Shapefile (.zip).'
+                },
                 { status: 400 }
             )
         }
+
+        console.log(`Processed ${processResult.success.length} features, ${processResult.errors.length} errors`)
+
+        // Insert into database
+        let imported = 0
+        const insertErrors: any[] = []
+
+        for (const record of processResult.success) {
+            try {
+                // Prepare data for insertion (excluding geometry for now)
+                const insertData = {
+                    parcel_id: record.parcel_id,
+                    provinsi: record.provinsi,
+                    kabupaten: record.kabupaten,
+                    kecamatan: record.kecamatan,
+                    desa: record.desa,
+                    nib: record.nib,
+                    su: record.su,
+                    hak: record.hak,
+                    tipe_hak: record.tipe_hak,
+                    luas_tertulis: record.luas_tertulis,
+                    luas_peta: record.luas_peta,
+                    sk: record.sk,
+                    tanggal_sk: record.tanggal_sk,
+                    tanggal_terbit_hak: record.tanggal_terbit_hak,
+                    berakhir_hak: record.berakhir_hak,
+                    pemilik: record.pemilik,
+                    tipe_pemilik: record.tipe_pemilik,
+                    guna_tanah_klasifikasi: record.guna_tanah_klasifikasi,
+                    guna_tanah_utama: record.guna_tanah_utama,
+                    penggunaan: record.penggunaan,
+                    terpetakan: record.terpetakan,
+                    kasus: record.kasus,
+                    pihak_bersengketa: record.pihak_bersengketa,
+                    solusi: record.solusi,
+                    hasil: record.hasil,
+                    upaya_penanganan: record.upaya_penanganan,
+                    no_peta: record.no_peta,
+                    status: record.status,
+                    keterangan: record.keterangan
+                    // Note: Geometry will be added when PostGIS support is enabled
+                }
+
+                console.log(`Inserting parcel with geometry: ${record.parcel_id}`)
+
+                // Use PostGIS function to insert with geometry
+                const { data, error } = await supabase.rpc('insert_parcel_with_geometry', {
+                    parcel_data: insertData,
+                    geom_geojson: JSON.stringify(record.geometry)
+                })
+
+                if (error) {
+                    console.error(`Insert error for ${record.parcel_id}:`, error)
+                    insertErrors.push({
+                        parcel_id: record.parcel_id,
+                        message: error.message,
+                        details: error
+                    })
+                } else {
+                    imported++
+                    console.log(`Successfully inserted with geometry: ${record.parcel_id}`)
+                }
+            } catch (error) {
+                console.error(`Exception inserting ${record.parcel_id}:`, error)
+                insertErrors.push({
+                    parcel_id: record.parcel_id,
+                    message: String(error)
+                })
+            }
+        }
+
+        const allErrors = [...processResult.errors, ...insertErrors]
+
+        console.log(`Import complete: ${imported} imported, ${allErrors.length} failed`)
+
+        return NextResponse.json({
+            success: true,
+            imported,
+            failed: allErrors.length,
+            total: processResult.success.length + processResult.errors.length,
+            errors: allErrors.slice(0, 10), // Limit error details
+            message: `Successfully imported ${imported} parcels from ${file.name}. ${allErrors.length} failed.`,
+            fileType: file.name.toLowerCase().endsWith('.zip') ? 'shapefile' : 'geojson'
+        })
 
     } catch (error) {
         console.error('Upload error:', error)
