@@ -121,7 +121,7 @@ const CadastralMap = () => {
                 ['==', ['get', 'tipe_hak'], 'Hak Pakai'], '#f59e0b',
                 ['==', ['get', 'status'], 'pending'], '#ef4444',
                 '#6b7280'
-            ],
+            ] as any,
             'fill-opacity': 0.6
         }
     }
@@ -135,7 +135,7 @@ const CadastralMap = () => {
                 'case',
                 ['==', ['get', 'status'], 'active'], 2,
                 1
-            ]
+            ] as any
         }
     }
 
@@ -147,7 +147,7 @@ const CadastralMap = () => {
             'line-width': 3,
             'line-opacity': 0.8
         },
-        filter: ['==', ['get', 'id'], '']
+        filter: ['==', ['get', 'id'], ''] as any
     }
 
     // Handle map click to show parcel details
@@ -165,7 +165,7 @@ const CadastralMap = () => {
             if (mapRef.current) {
                 mapRef.current.getMap().setFilter('cadastral-parcels-highlight', [
                     '==', ['get', 'id'], feature.properties.id
-                ])
+                ] as any)
             }
         }
     }, [])
