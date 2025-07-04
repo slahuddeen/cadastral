@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '../../../lib/supabase'
 import AdmZip from 'adm-zip'
-import shapefile from 'shapefile'
+import * as shapefile from 'shapefile'
 
 interface CadastralRecord {
     parcel_id: string
@@ -184,10 +184,10 @@ async function processShapefile(zipBuffer: Buffer): Promise<{ success: Cadastral
 
         // Read shapefile using shapefile library
         const features: any[] = []
-
+        
         // Use shapefile.read with buffers
         const source = await shapefile.read(shpBuffer, dbfBuffer)
-
+        
         if (source.type === 'FeatureCollection') {
             features.push(...source.features)
         } else if (source.features) {
@@ -318,9 +318,9 @@ export async function POST(request: NextRequest) {
             processResult = await processGeoJSON(geoJson)
         } else {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: 'Unsupported file format. Please use GeoJSON (.json or .geojson) or Shapefile (.zip).'
+                { 
+                    success: false, 
+                    message: 'Unsupported file format. Please use GeoJSON (.json or .geojson) or Shapefile (.zip).' 
                 },
                 { status: 400 }
             )
