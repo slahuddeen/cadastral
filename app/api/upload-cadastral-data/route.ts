@@ -155,6 +155,112 @@ function mapFieldNames(properties: any): Partial<CadastralRecord> {
     return mapped
 }
 
+// Function to detect and normalize geometry coordinates
+function normalizeGeometry(geometry: any, projectionInfo?: string | null): any {
+    if (!geometry || !geometry.coordinates) {
+        return geometry
+    }
+
+    // Function to check if coordinates look like UTM (large numbers) vs Geographic (small numbers)
+    const detectCoordinateSystem = (coords: number[][]): 'utm' | 'geographic' => {
+        const firstCoord = coords[0]
+        if (!firstCoord || firstCoord.length < 2) return 'geographic'
+
+        const [x, y] = firstCoord
+
+        // UTM coordinates are typically > 100,000 for easting and > 1,000,000 for northing
+        // Geographic coordinates are typically -180 to 180 for longitude, -90 to 90 for latitude
+        if (Math.abs(x) > 1000 || Math.abs(y) > 1000) {
+            return 'utm'
+        }
+
+        return 'geographic'
+    }
+
+    // Function to extract coordinate pairs from any geometry type
+    const extractCoordPairs = (coords: any): number[][] => {
+        if (Array.isArray(coords[0])) {
+            if (Array.isArray(coords[0][0])) {
+                // MultiPolygon or nested structure
+                return extractCoordPairs(coords[0])
+            } else {
+                // Polygon exterior ring
+                return coords as number[][]
+            }
+        }
+        return [coords] as number[][]
+    }
+
+    // Detect coordinate system
+    let coordPairs: number[][]
+    if (geometry.type === 'Polygon') {
+        coordPairs = extractCoordPairs(geometry.coordinates[0])
+    } else if (geometry.type === 'MultiPolygon') {
+        coordPairs = extractCoordPairs(geometry.coordinates[0][0])
+    } else {
+        return geometry // Return as-is for other geometry types
+    }
+
+    const coordSystem = detectCoordinateSystem(coordPairs)
+
+    // If coordinates are already in geographic format, return as-is but ensure MultiPolygon type
+    if (coordSystem === 'geographic') {
+        console.log('Coordinates detected as geographic (WGS84), converting to MultiPolygon if needed')
+        if (geometry.type === 'Polygon') {
+            return {
+                type: 'MultiPolygon',
+                coordinates: [geometry.coordinates]
+            }
+        }
+        return geometry
+    }
+
+    console.log('Coordinates detected as UTM, conversion needed')
+
+    // For UTM coordinates, we'll assume they need conversion
+    // This is a simple approximation - in production you'd want proper coordinate transformation
+    const convertUTMToGeographic = (coords: number[][]): number[][] => {
+        return coords.map(([easting, northing]) => {
+            // UTM Zone 47N conversion approximation
+            // This is a simplified conversion - in production use proper proj4 library
+            const centralMeridian = 99 // Central meridian for UTM Zone 47N
+            const falseEasting = 500000
+            const scaleFactor = 0.9996
+
+            // Simplified conversion (this is an approximation)
+            const x = easting - falseEasting
+            const longitude = centralMeridian + (x / (scaleFactor * 111319.9))
+            const latitude = northing / 111319.9
+
+            return [longitude, latitude]
+        })
+    }
+
+    // Apply conversion based on geometry type
+    if (geometry.type === 'Polygon') {
+        const normalizedGeometry = {
+            ...geometry,
+            coordinates: geometry.coordinates.map((ring: number[][]) =>
+                convertUTMToGeographic(ring)
+            )
+        }
+        // Convert Polygon to MultiPolygon for database compatibility
+        return {
+            type: 'MultiPolygon',
+            coordinates: [normalizedGeometry.coordinates]
+        }
+    } else if (geometry.type === 'MultiPolygon') {
+        return {
+            ...geometry,
+            coordinates: geometry.coordinates.map((polygon: number[][][]) =>
+                polygon.map((ring: number[][]) => convertUTMToGeographic(ring))
+            )
+        }
+    }
+
+    return geometry
+}
+
 async function processShapefile(zipBuffer: Buffer): Promise<{ success: CadastralRecord[], errors: any[] }> {
     const success: CadastralRecord[] = []
     const errors: any[] = []
@@ -176,6 +282,14 @@ async function processShapefile(zipBuffer: Buffer): Promise<{ success: Cadastral
             throw new Error('No .dbf file found in ZIP archive')
         }
 
+        // Find .prj file (optional, contains projection info)
+        const prjEntry = entries.find(entry => entry.entryName.toLowerCase().endsWith('.prj'))
+        let projectionInfo = null
+        if (prjEntry) {
+            projectionInfo = prjEntry.getData().toString('utf8')
+            console.log('Found projection info:', projectionInfo.substring(0, 100) + '...')
+        }
+
         console.log(`Found shapefile: ${shpEntry.entryName}`)
 
         // Extract files to buffers
@@ -184,10 +298,10 @@ async function processShapefile(zipBuffer: Buffer): Promise<{ success: Cadastral
 
         // Read shapefile using shapefile library
         const features: any[] = []
-        
+
         // Use shapefile.read with buffers
         const source = await shapefile.read(shpBuffer, dbfBuffer)
-        
+
         if (source.type === 'FeatureCollection') {
             features.push(...source.features)
         } else if (source.features) {
@@ -210,10 +324,13 @@ async function processShapefile(zipBuffer: Buffer): Promise<{ success: Cadastral
                     properties.hak ||
                     `PARCEL_${Date.now()}_${i}`
 
+                // Normalize geometry coordinates
+                const normalizedGeometry = normalizeGeometry(feature.geometry, projectionInfo)
+
                 const record: CadastralRecord = {
                     parcel_id,
                     ...properties,
-                    geometry: feature.geometry,
+                    geometry: normalizedGeometry,
                     status: properties.status || 'active'
                 }
 
@@ -254,10 +371,13 @@ async function processGeoJSON(geoJson: any): Promise<{ success: CadastralRecord[
                 properties.hak ||
                 `PARCEL_${Date.now()}_${i}`
 
+            // Normalize geometry coordinates (GeoJSON is typically already in WGS84)
+            const normalizedGeometry = normalizeGeometry(feature.geometry, null)
+
             const record: CadastralRecord = {
                 parcel_id,
                 ...properties,
-                geometry: feature.geometry,
+                geometry: normalizedGeometry,
                 status: properties.status || 'active'
             }
 
@@ -318,9 +438,9 @@ export async function POST(request: NextRequest) {
             processResult = await processGeoJSON(geoJson)
         } else {
             return NextResponse.json(
-                { 
-                    success: false, 
-                    message: 'Unsupported file format. Please use GeoJSON (.json or .geojson) or Shapefile (.zip).' 
+                {
+                    success: false,
+                    message: 'Unsupported file format. Please use GeoJSON (.json or .geojson) or Shapefile (.zip).'
                 },
                 { status: 400 }
             )
@@ -365,27 +485,40 @@ export async function POST(request: NextRequest) {
                     no_peta: record.no_peta,
                     status: record.status,
                     keterangan: record.keterangan
-                    // Note: Geometry will be added when PostGIS support is enabled
                 }
 
-                console.log(`Inserting parcel with geometry: ${record.parcel_id}`)
+                console.log(`Inserting parcel with normalized geometry: ${record.parcel_id}`)
 
-                // Use PostGIS function to insert with geometry
-                const { data, error } = await supabase.rpc('insert_parcel_with_geometry', {
+                // Try the smart coordinate detection function first
+                let { data, error } = await supabase.rpc('insert_parcel_with_geometry', {
                     parcel_data: insertData,
                     geom_geojson: JSON.stringify(record.geometry)
                 })
+
+                // If that fails, try the simple function that assumes WGS84
+                if (error) {
+                    console.log(`First attempt failed for ${record.parcel_id}, trying simple function:`, error.message)
+
+                    const { data: data2, error: error2 } = await supabase.rpc('insert_parcel_with_geometry_simple', {
+                        parcel_data: insertData,
+                        geom_geojson: JSON.stringify(record.geometry)
+                    })
+
+                    data = data2
+                    error = error2
+                }
 
                 if (error) {
                     console.error(`Insert error for ${record.parcel_id}:`, error)
                     insertErrors.push({
                         parcel_id: record.parcel_id,
                         message: error.message,
-                        details: error
+                        details: error,
+                        geometry_sample: JSON.stringify(record.geometry).substring(0, 200) + '...'
                     })
                 } else {
                     imported++
-                    console.log(`Successfully inserted with geometry: ${record.parcel_id}`)
+                    console.log(`Successfully inserted with normalized geometry: ${record.parcel_id}`)
                 }
             } catch (error) {
                 console.error(`Exception inserting ${record.parcel_id}:`, error)
