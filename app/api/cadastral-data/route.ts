@@ -1,4 +1,4 @@
-﻿// app/api/cadastral-data/route.ts
+// app/api/cadastral-data/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '../../../lib/supabase'
 
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
                     const ids = data.map(record => record.id)
                     const { data: geometryData, error: geomError } = await supabase
                         .rpc('get_geometries_by_ids', { parcel_ids: ids })
-
+                    
                     if (!geomError && geometryData) {
                         // Merge geometry data back into records
                         data = data.map(record => {
@@ -154,9 +154,9 @@ export async function GET(request: NextRequest) {
         }
 
         // Convert to GeoJSON format
-        const features = (data || []).map((record) => {
+        const features = (data || []).map((record: any) => {
             let geometry = null
-
+            
             // Parse geometry from PostGIS
             if (record.geometry_geojson) {
                 try {
