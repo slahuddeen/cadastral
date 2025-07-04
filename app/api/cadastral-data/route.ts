@@ -218,7 +218,7 @@ export async function GET(request: NextRequest) {
                 },
                 geometry: geometry
             }
-        }).filter(feature => feature.geometry !== null) // Only include features with valid geometry
+        }).filter((feature: any) => feature.geometry !== null) // Only include features with valid geometry
 
         const geoJson = {
             type: 'FeatureCollection',
