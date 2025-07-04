@@ -1,4 +1,4 @@
-﻿// app/test/postgis/page.tsx
+// app/test/postgis/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -47,7 +47,7 @@ export default function PostGISTestPage() {
                 .rpc('get_postgis_functions_list')
                 .then(() => ({ data: 'Custom functions available', error: null }))
                 .catch(() => ({ data: null, error: 'Custom functions not available' }))
-
+            
             if (error) throw new Error(error)
             updateTest(1, { status: 'success', result: 'All PostGIS functions are available' })
         } catch (error) {
@@ -61,7 +61,7 @@ export default function PostGISTestPage() {
                 .from('cadastral_parcels')
                 .select('geometry')
                 .limit(1)
-
+            
             if (error) throw error
             updateTest(2, { status: 'success', result: 'Geometry column exists and accessible' })
         } catch (error) {
@@ -74,7 +74,7 @@ export default function PostGISTestPage() {
             // Check for spatial indexes using a simpler query
             const { data, error } = await supabase
                 .rpc('check_spatial_indexes')
-
+            
             if (error) {
                 // Fallback: try direct query
                 const { data: indexData, error: indexError } = await supabase
@@ -82,11 +82,11 @@ export default function PostGISTestPage() {
                     .select('index_name, table_name')
                     .eq('table_name', 'cadastral_parcels')
                     .ilike('index_name', '%geometry%')
-
+                
                 if (indexError) throw new Error(`Failed to check indexes: ${indexError.message}`)
-
-                updateTest(3, {
-                    status: indexData && indexData.length > 0 ? 'success' : 'error',
+                
+                updateTest(3, { 
+                    status: indexData && indexData.length > 0 ? 'success' : 'error', 
                     result: indexData && indexData.length > 0 ? `Found ${indexData.length} spatial indexes` : 'No spatial indexes found. Performance may be affected.',
                     error: indexData && indexData.length === 0 ? 'Run: CREATE INDEX idx_cadastral_parcels_geometry ON cadastral_parcels USING GIST (geometry);' : undefined
                 })
@@ -123,11 +123,28 @@ export default function PostGISTestPage() {
 
             if (error) {
                 console.error('Insert error details:', error)
-                throw new Error(`Failed to insert test parcel: ${error.message}`)
+                console.error('Error message:', error.message)
+                console.error('Error code:', error.code)
+                console.error('Error details:', error.details)
+                console.error('Error hint:', error.hint)
+                
+                // Try to get more detailed error information
+                let errorMessage = 'Unknown error'
+                if (error.message) {
+                    errorMessage = error.message
+                } else if (typeof error === 'string') {
+                    errorMessage = error
+                } else if (error.details) {
+                    errorMessage = error.details
+                } else {
+                    errorMessage = `Error object: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}`
+                }
+                
+                throw new Error(`Failed to insert test parcel: ${errorMessage}`)
             }
-
+            
             console.log('Insert successful, data:', data)
-
+            
             // Clean up test data
             const deleteResult = await supabase
                 .from('cadastral_parcels')
@@ -141,7 +158,7 @@ export default function PostGISTestPage() {
             updateTest(4, { status: 'success', result: 'Successfully inserted and deleted test geometry' })
         } catch (error) {
             console.error('Geometry insert test failed:', error)
-            const errorMsg = error instanceof Error ? error.message : JSON.stringify(error, null, 2)
+            const errorMsg = error instanceof Error ? error.message : JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
             updateTest(4, { status: 'error', error: errorMsg })
         }
 
@@ -159,7 +176,7 @@ export default function PostGISTestPage() {
                 console.error('Spatial query error:', error)
                 throw new Error(`Spatial query failed: ${error.message}`)
             }
-
+            
             console.log('Spatial query result:', data)
             updateTest(5, { status: 'success', result: `Spatial query returned ${data?.length || 0} parcels` })
         } catch (error) {
@@ -184,7 +201,7 @@ export default function PostGISTestPage() {
                 console.error('Area calculation error:', error)
                 throw new Error(`Area calculation failed: ${error.message}`)
             }
-
+            
             console.log('Area calculation result:', data)
             updateTest(6, { status: 'success', result: `Calculated area: ${data?.toFixed(2)} m²` })
         } catch (error) {
@@ -222,30 +239,33 @@ export default function PostGISTestPage() {
             <h1 className="text-2xl font-bold mb-6">🗺️ PostGIS Integration Test</h1>
 
             {/* Overall Status */}
-            <div className={`p-4 rounded-lg mb-6 ${allTestsPassed ? 'bg-green-50 border border-green-200' :
-                    hasErrors ? 'bg-red-50 border border-red-200' :
-                        'bg-yellow-50 border border-yellow-200'
-                }`}>
+            <div className={`p-4 rounded-lg mb-6 ${
+                allTestsPassed ? 'bg-green-50 border border-green-200' :
+                hasErrors ? 'bg-red-50 border border-red-200' :
+                'bg-yellow-50 border border-yellow-200'
+            }`}>
                 <div className="flex items-center gap-2">
                     <span className="text-xl">
                         {allTestsPassed ? '🎉' : hasErrors ? '⚠️' : '⏳'}
                     </span>
                     <div>
-                        <h2 className={`text-lg font-semibold ${allTestsPassed ? 'text-green-800' :
-                                hasErrors ? 'text-red-800' :
-                                    'text-yellow-800'
-                            }`}>
+                        <h2 className={`text-lg font-semibold ${
+                            allTestsPassed ? 'text-green-800' :
+                            hasErrors ? 'text-red-800' :
+                            'text-yellow-800'
+                        }`}>
                             {allTestsPassed ? 'PostGIS Fully Operational!' :
-                                hasErrors ? 'PostGIS Issues Detected' :
-                                    'Running PostGIS Tests...'}
+                             hasErrors ? 'PostGIS Issues Detected' :
+                             'Running PostGIS Tests...'}
                         </h2>
-                        <p className={`text-sm ${allTestsPassed ? 'text-green-600' :
-                                hasErrors ? 'text-red-600' :
-                                    'text-yellow-600'
-                            }`}>
+                        <p className={`text-sm ${
+                            allTestsPassed ? 'text-green-600' :
+                            hasErrors ? 'text-red-600' :
+                            'text-yellow-600'
+                        }`}>
                             {allTestsPassed ? 'Your cadastral system has full spatial capabilities.' :
-                                hasErrors ? 'Some PostGIS features may not work correctly.' :
-                                    'Please wait while we verify your PostGIS setup...'}
+                             hasErrors ? 'Some PostGIS features may not work correctly.' :
+                             'Please wait while we verify your PostGIS setup...'}
                         </p>
                     </div>
                 </div>
@@ -254,7 +274,7 @@ export default function PostGISTestPage() {
             {/* Test Results */}
             <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
                 <h2 className="text-lg font-semibold mb-4">Test Results</h2>
-
+                
                 <div className="space-y-3">
                     {tests.map((test, index) => (
                         <div key={index} className="flex items-start gap-3 p-3 border rounded-lg">
@@ -291,7 +311,7 @@ export default function PostGISTestPage() {
             {/* Next Steps */}
             <div className="bg-blue-50 rounded-lg p-6">
                 <h2 className="text-lg font-semibold mb-4">📋 Next Steps</h2>
-
+                
                 {allTestsPassed ? (
                     <div className="space-y-2 text-sm text-blue-800">
                         <p><strong>✅ PostGIS is fully operational!</strong></p>
