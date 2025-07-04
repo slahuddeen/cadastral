@@ -322,6 +322,3 @@ export class CoordinateUtils {
         }
     }
 }
-
-// Export types for use in other files
-export type { SpatialBounds, ParcelWithGeometry }
