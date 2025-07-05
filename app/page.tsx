@@ -2,8 +2,14 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { Suspense } from 'react'
+import { Suspense, useState } from 'react'
 import NavigationHeader from '../components/NavigationHeader'
+
+interface CoordinateOffset {
+    latitude: number
+    longitude: number
+    enabled: boolean
+}
 
 const CadastralMap = dynamic(() => import('../components/CadastralMap'), {
     ssr: false,
@@ -23,10 +29,23 @@ const CadastralMap = dynamic(() => import('../components/CadastralMap'), {
 })
 
 export default function Home() {
+    const [coordinateOffset, setCoordinateOffset] = useState<CoordinateOffset>({
+        latitude: 0,
+        longitude: 0,
+        enabled: false
+    })
+
+    const handleCoordinateOffsetChange = (newOffset: CoordinateOffset) => {
+        setCoordinateOffset(newOffset)
+    }
+
     return (
         <main className="h-screen w-screen overflow-hidden flex flex-col">
-            {/* Navigation Header */}
-            <NavigationHeader />
+            {/* Navigation Header with coordinate fix functionality */}
+            <NavigationHeader
+                onCoordinateOffsetChange={handleCoordinateOffsetChange}
+                currentOffset={coordinateOffset}
+            />
 
             {/* Map Container */}
             <div className="flex-1 relative">
@@ -43,7 +62,7 @@ export default function Home() {
                         </div>
                     </div>
                 }>
-                    <CadastralMap />
+                    <CadastralMap coordinateOffset={coordinateOffset} />
                 </Suspense>
             </div>
         </main>

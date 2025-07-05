@@ -30,135 +30,8 @@ interface CoordinateOffset {
     enabled: boolean
 }
 
-// Coordinate Correction Panel Component
-const CoordinateCorrectionPanel = ({
-    onOffsetChange,
-    currentOffset
-}: {
-    onOffsetChange: (offset: CoordinateOffset) => void
-    currentOffset: CoordinateOffset
-}) => {
-    const [showPanel, setShowPanel] = useState(false)
-    const [tempOffset, setTempOffset] = useState(currentOffset)
-
-    const presetOffsets = [
-        { name: "No Offset", lat: 0, lon: 0 },
-        { name: "UTM to WGS84 (~50m south)", lat: -0.0005, lon: 0 },
-        { name: "Datum Shift (~100m south)", lat: -0.001, lon: 0 },
-        { name: "Small North Shift", lat: 0.0005, lon: 0 },
-        { name: "Small South Shift", lat: -0.0005, lon: 0 },
-        { name: "Small East Shift", lat: 0, lon: 0.0005 },
-        { name: "Small West Shift", lat: 0, lon: -0.0005 }
-    ]
-
-    const applyOffset = () => {
-        onOffsetChange(tempOffset)
-    }
-
-    const applyPreset = (lat: number, lon: number) => {
-        const newOffset = { latitude: lat, longitude: lon, enabled: true }
-        setTempOffset(newOffset)
-        onOffsetChange(newOffset)
-    }
-
-    return (
-        <div className="absolute top-20 right-4 z-10 bg-white rounded-lg shadow-lg">
-            <button
-                onClick={() => setShowPanel(!showPanel)}
-                className="w-full px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm font-medium"
-            >
-                🔧 Coordinate Fix ({currentOffset.enabled ? 'ON' : 'OFF'})
-            </button>
-
-            {showPanel && (
-                <div className="p-4 border-t">
-                    <h3 className="font-semibold text-sm mb-3">Coordinate Correction</h3>
-
-                    {/* Manual Offset Controls */}
-                    <div className="space-y-3 mb-4">
-                        <div>
-                            <label className="block text-xs font-medium mb-1">Latitude Offset (degrees)</label>
-                            <input
-                                type="number"
-                                step="0.00001"
-                                value={tempOffset.latitude}
-                                onChange={(e) => setTempOffset({
-                                    ...tempOffset,
-                                    latitude: parseFloat(e.target.value) || 0
-                                })}
-                                className="w-full px-2 py-1 border rounded text-xs"
-                                placeholder="0.00000"
-                            />
-                            <div className="text-xs text-gray-500 mt-1">
-                                {(tempOffset.latitude * 111320).toFixed(1)}m {tempOffset.latitude > 0 ? 'north' : 'south'}
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-medium mb-1">Longitude Offset (degrees)</label>
-                            <input
-                                type="number"
-                                step="0.00001"
-                                value={tempOffset.longitude}
-                                onChange={(e) => setTempOffset({
-                                    ...tempOffset,
-                                    longitude: parseFloat(e.target.value) || 0
-                                })}
-                                className="w-full px-2 py-1 border rounded text-xs"
-                                placeholder="0.00000"
-                            />
-                            <div className="text-xs text-gray-500 mt-1">
-                                {(tempOffset.longitude * 111320).toFixed(1)}m {tempOffset.longitude > 0 ? 'east' : 'west'}
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="checkbox"
-                                checked={tempOffset.enabled}
-                                onChange={(e) => setTempOffset({
-                                    ...tempOffset,
-                                    enabled: e.target.checked
-                                })}
-                            />
-                            <span className="text-xs">Enable correction</span>
-                        </div>
-
-                        <button
-                            onClick={applyOffset}
-                            className="w-full px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
-                        >
-                            Apply Manual Offset
-                        </button>
-                    </div>
-
-                    {/* Preset Offsets */}
-                    <div>
-                        <h4 className="text-xs font-medium mb-2">Quick Presets</h4>
-                        <div className="space-y-1">
-                            {presetOffsets.map((preset, index) => (
-                                <button
-                                    key={index}
-                                    onClick={() => applyPreset(preset.lat, preset.lon)}
-                                    className="w-full px-2 py-1 text-xs border rounded hover:bg-gray-50 text-left"
-                                >
-                                    {preset.name}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Current Status */}
-                    <div className="mt-4 pt-3 border-t text-xs">
-                        <div className="font-medium">Current Offset:</div>
-                        <div>Lat: {currentOffset.latitude.toFixed(6)}° ({(currentOffset.latitude * 111320).toFixed(1)}m)</div>
-                        <div>Lon: {currentOffset.longitude.toFixed(6)}° ({(currentOffset.longitude * 111320).toFixed(1)}m)</div>
-                        <div>Status: {currentOffset.enabled ? '✅ Active' : '❌ Disabled'}</div>
-                    </div>
-                </div>
-            )}
-        </div>
-    )
+interface CadastralMapProps {
+    coordinateOffset?: CoordinateOffset
 }
 
 // Function to apply coordinate offset to GeoJSON data
@@ -197,7 +70,7 @@ const applyCoordinateOffset = (geoJsonData: any, offset: CoordinateOffset) => {
     }
 }
 
-const CadastralMap = () => {
+const CadastralMap = ({ coordinateOffset = { latitude: 0, longitude: 0, enabled: false } }: CadastralMapProps) => {
     const mapRef = useRef<MapRef>(null)
     const [loading, setLoading] = useState(false)
     const [dataLoading, setDataLoading] = useState(true)
@@ -205,12 +78,6 @@ const CadastralMap = () => {
     const [popupInfo, setPopupInfo] = useState<PopupInfo | null>(null)
     const [selectedFilter, setSelectedFilter] = useState('all')
 
-    // Coordinate offset state
-    const [coordinateOffset, setCoordinateOffset] = useState<CoordinateOffset>({
-        latitude: 0,
-        longitude: 0,
-        enabled: false
-    })
     const [rawCadastralData, setRawCadastralData] = useState<CadastralData | null>(null)
     const [displayData, setDisplayData] = useState<CadastralData | null>(null)
 
@@ -528,14 +395,8 @@ const CadastralMap = () => {
                 </div>
             </div>
 
-            {/* Coordinate Correction Panel */}
-            <CoordinateCorrectionPanel
-                onOffsetChange={setCoordinateOffset}
-                currentOffset={coordinateOffset}
-            />
-
             {/* Map Statistics */}
-            <div className="absolute top-4 right-80 z-10 bg-white rounded-lg shadow-lg p-4">
+            <div className="absolute top-4 right-4 z-10 bg-white rounded-lg shadow-lg p-4">
                 <div className="text-sm text-gray-600">
                     <div className="font-semibold mb-2">📊 Cadastral Statistics</div>
                     <div>Total Parcels: {filteredData?.features.length || 0}</div>
